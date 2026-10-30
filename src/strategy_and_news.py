@@ -37,10 +37,6 @@ from src.alpha_scout import WalkForwardAlphaScout
 from src.data_engine import CapitalConfig, HybridDataEngine
 from src.feature_engine import ChameleonFeatureEngine
 
-# Exact Indian statutory CNC round-trip fee drag on a ₹25,000 slot:
-# 0.10% Buy STT + 0.10% Sell STT + ₹15.93 CDSL DP (~0.064%) + 0.015% Stamp + 0.011% Exchange/SEBI/GST = 0.29%
-INDIAN_ROUND_TRIP_TAX_PCT: float = 0.29
-
 
 class NewsCatalystAssessment(BaseModel):
     """
@@ -111,11 +107,12 @@ class EventDrivenStrategyTournament:
     - Uses rolling 90th-percentile empirical drift boundaries for Surprise Recalibration.
     - Uses daily cross-sectional quantiles (`rank(pct=True)`) to identify strategy signals.
     - Learns `stop_multiplier` and `target_multiplier` directly from the empirical excursion distribution
-      of the last N=35 completed signals per strategy.
+      of completed signals per strategy, deducting scale-invariant statutory taxes + order-size impact.
     """
 
-    def __init__(self, target_signal_count: int = 35):
+    def __init__(self, target_signal_count: int = 35, capital_cfg: Optional[CapitalConfig] = None):
         self.target_signal_count = target_signal_count
+        self.capital_cfg = capital_cfg or CapitalConfig()
 
     def check_surprise_recalibration_trigger(
         self,
@@ -229,20 +226,29 @@ class EventDrivenStrategyTournament:
             downside_ratios = realized_over_tail[realized_over_tail < 0].abs()
             upside_ratios = realized_over_tail[realized_over_tail > 0]
 
-            learned_stop_mult = float(downside_ratios.quantile(0.60)) if len(downside_ratios) >= 5 else 0.70
-            learned_stop_mult = float(np.clip(learned_stop_mult, 0.65, 1.10))
+            q_lo = float(downside_ratios.quantile(0.25)) if len(downside_ratios) >= 5 else 0.50
+            q_hi = float(downside_ratios.quantile(0.85)) if len(downside_ratios) >= 5 else 1.25
+            learned_stop_mult = float(downside_ratios.quantile(0.60)) if len(downside_ratios) >= 5 else 0.75
+            learned_stop_mult = float(np.clip(learned_stop_mult, q_lo, q_hi))
 
             learned_upside_mult = float(upside_ratios.quantile(0.96)) if len(upside_ratios) >= 5 else 2.20
-            learned_target_mult = float(np.clip(learned_upside_mult / max(0.5, learned_stop_mult), 2.00, 3.80))
+            learned_target_mult = float(learned_upside_mult / max(1e-4, learned_stop_mult))
 
             stop_pct = (sub["empirical_tail_stop_pct"] * learned_stop_mult).values
             target_pct = stop_pct * learned_target_mult
             raw_ret_pct = sub["fwd_5d_raw_return"].values * 100.0
             nifty_ret_pct = sub["fwd_5d_nifty_return"].fillna(0.0).values * 100.0
 
+            # Scale-invariant friction per signal: Statutory Tax (at current CapitalConfig) + Order-Size Amihud Impact
+            slot_notional_inr = self.capital_cfg.ideal_slot_size_inr
+            adv_inr = (sub["close"] * sub["volume"]).replace(0, np.nan).bfill().values
+            part_rate = np.clip(slot_notional_inr / adv_inr, 1e-7, 0.25)
+            impact_pct = 2.0 * sub["parkinson_vol_21d"].bfill().values * np.sqrt(part_rate) * 100.0
+            dynamic_friction_pct = self.capital_cfg.dynamic_round_trip_tax_pct + impact_pct
+
             bounded_gross_pct = np.clip(raw_ret_pct, -stop_pct * 100.0, target_pct * 100.0)
-            net_post_tax_pct = bounded_gross_pct - INDIAN_ROUND_TRIP_TAX_PCT
-            excess_post_tax_pct = bounded_gross_pct - nifty_ret_pct - INDIAN_ROUND_TRIP_TAX_PCT
+            net_post_tax_pct = bounded_gross_pct - dynamic_friction_pct
+            excess_post_tax_pct = bounded_gross_pct - nifty_ret_pct - dynamic_friction_pct
 
             days_span = max(1, int((sub["date"].max() - sub["date"].min()).days))
             days_ago = (cutoff_date - sub["date"]).dt.days.values.astype(float)

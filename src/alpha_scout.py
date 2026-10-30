@@ -63,13 +63,20 @@ class WalkForwardAlphaScout:
     Purged Walk-Forward LightGBM Alpha Scout + TreeSHAP Attribution Engine.
     """
 
-    def __init__(self, wf_cfg: Optional[WalkForwardConfig] = None, cache_dir: str | Path = "data/cache"):
+    def __init__(
+        self,
+        wf_cfg: Optional[WalkForwardConfig] = None,
+        capital_cfg: Optional[CapitalConfig] = None,
+        cache_dir: str | Path = "data/cache",
+    ):
         self.wf_cfg = wf_cfg or WalkForwardConfig()
+        self.capital_cfg = capital_cfg or CapitalConfig()
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.model: Optional[lgb.LGBMRegressor] = None
         self.explainer: Optional[shap.TreeExplainer] = None
         self.last_train_date: Optional[pd.Timestamp] = None
+        self.last_rank_ic: float = 0.15
 
     def _compute_adaptive_sample_weights(self, train_df: pd.DataFrame, current_vix_z: float) -> np.ndarray:
         """
@@ -141,6 +148,7 @@ class WalkForwardAlphaScout:
         # Compute in-sample rank IC (Spearman correlation between predicted and actual Information Ratio)
         preds_in = self.model.predict(X_train)
         rank_ic = pd.Series(preds_in).corr(pd.Series(y_train), method="spearman")
+        self.last_rank_ic = float(np.clip(rank_ic if not np.isnan(rank_ic) else 0.15, 0.05, 0.85))
 
         return {
             "train_start_date": start_date.strftime("%Y-%m-%d"),
@@ -172,13 +180,15 @@ class WalkForwardAlphaScout:
         raw_pred_ir = self.model.predict(X_day)
         shap_matrix = self.explainer.shap_values(X_day)
 
-        # Combine ML prediction with Validated Nifty 50 Structural Archetype Synergy (scaled by cross-sectional prediction std)
-        pred_std = max(0.05, float(np.std(raw_pred_ir)))
+        # Combine ML prediction with Validated Nifty 50 Structural Archetype Synergy:
+        # Weight is self-calibrated from (1.0 - last_rank_ic) * cross-sectional prediction dispersion
+        pred_std = max(1e-4, float(np.std(raw_pred_ir)))
         in_archetype = (day_slice["micro_regime"] != "NEUTRAL_WATCH").astype(float).values
-        day_slice["pred_info_ratio"] = raw_pred_ir + 0.50 * pred_std * in_archetype
+        structural_prior_weight = float(1.0 - self.last_rank_ic)
+        day_slice["pred_info_ratio"] = raw_pred_ir + structural_prior_weight * pred_std * in_archetype
 
         # Convert predicted 5-day Information Ratio into Expected 5-Day Alpha (%) using stock's 5d vol
-        five_day_vol_pct = (day_slice["ret_std_21d"] * np.sqrt(5.0) * 100.0).clip(1.2, 12.0)
+        five_day_vol_pct = (day_slice["ret_std_21d"] * np.sqrt(5.0) * 100.0).bfill()
         day_slice["expected_5d_alpha_pct"] = (day_slice["pred_info_ratio"] * five_day_vol_pct).round(2)
 
         # Cross-sectional conviction percentile (0 to 100)
@@ -220,9 +230,16 @@ class WalkForwardAlphaScout:
         ranked_df = day_slice.sort_values("pred_info_ratio", ascending=False).reset_index(drop=True)
         ranked_df["alpha_rank"] = np.arange(1, len(ranked_df) + 1)
 
-        # Dynamic Post-Tax Hurdle: Round-trip Indian statutory fee (~0.29% on ₹25k slot) + 1 Cross-Sectional Standard Error of Alpha
+        # Scale-Invariant Dynamic Friction Hurdle:
+        # Exact Statutory Tax (at current CapitalConfig) + Median Order-Size Amihud Impact + 1 Cross-Sectional Standard Error
+        slot_notional_inr = self.capital_cfg.ideal_slot_size_inr
+        median_adv_inr = float((ranked_df["close"] * ranked_df["volume"]).median())
+        median_part_rate = np.clip(slot_notional_inr / max(1.0, median_adv_inr), 1e-7, 0.25)
+        median_impact_pct = float(2.0 * ranked_df["parkinson_vol_21d"].median() * np.sqrt(median_part_rate) * 100.0)
         alpha_std_err = float(ranked_df["expected_5d_alpha_pct"].std() / np.sqrt(len(ranked_df)))
-        dynamic_alpha_hurdle_pct = round(0.29 + alpha_std_err, 3)
+        dynamic_alpha_hurdle_pct = round(
+            self.capital_cfg.dynamic_round_trip_tax_pct + median_impact_pct + alpha_std_err, 3
+        )
         ir_median = float(ranked_df["pred_info_ratio"].median())
 
         # Build Sector Alpha Breadth Table (shows which sectors earn capital vs. which get starved at ₹0)

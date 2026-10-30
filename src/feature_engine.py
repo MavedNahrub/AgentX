@@ -58,9 +58,10 @@ class ChameleonFeatureEngine:
     Computes self-normalizing multi-horizon features and leak-free forward risk-adjusted targets.
     """
 
-    def __init__(self, cache_dir: str | Path = "data/cache"):
+    def __init__(self, cache_dir: str | Path = "data/cache", capital_cfg: CapitalConfig | None = None):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.capital_cfg = capital_cfg or CapitalConfig()
         self.feature_cache_path = self.cache_dir / "nifty50_chameleon_features.parquet"
 
     def build_features(
@@ -228,16 +229,29 @@ class ChameleonFeatureEngine:
         nifty_exit_5d = df.groupby("symbol")["nifty_close"].shift(-6)
         df["fwd_5d_nifty_return"] = (nifty_exit_5d - nifty_next) / nifty_next
 
-        # Asymmetric Stop/Target-Bounded Post-Tax Net Return + Excess Return vs Nifty
-        stop_dist = df["empirical_tail_stop_pct"] * 0.65
-        target_dist = df["empirical_tail_stop_pct"] * 2.05
+        # Empirical Excursion Bounds: learned from each stock's own rolling 60d upside (95th) & downside (5th) quantiles
+        upside_q95 = grouped["ret_1d"].transform(
+            lambda s: s.rolling(60, min_periods=20).quantile(0.95).abs()
+        ).bfill()
+        stop_dist = (downside_q05.bfill() / np.maximum(1e-6, df["empirical_tail_stop_pct"])) * df["empirical_tail_stop_pct"]
+        target_dist = upside_q95 * np.sqrt(5.0)
         bounded_gross_ret = np.clip(df["fwd_5d_raw_return"], -stop_dist, target_dist)
-        net_post_tax_ret = bounded_gross_ret - 0.0029
-        excess_vs_nifty_ret = bounded_gross_ret - df["fwd_5d_nifty_return"].fillna(0.0) - 0.0029
 
+        # Scale-Invariant Round-Trip Friction = Statutory Tax (at current CapitalConfig) + Square-Root Order-Size Impact
+        slot_notional_inr = self.capital_cfg.ideal_slot_size_inr
+        adv_rupees_21d = (df["close"] * vol_med_21).replace(0, np.nan).bfill()
+        order_participation = (slot_notional_inr / adv_rupees_21d).clip(1e-7, 0.25)
+        round_trip_impact_rate = 2.0 * df["parkinson_vol_21d"].bfill() * np.sqrt(order_participation)
+        total_friction_rate = self.capital_cfg.dynamic_round_trip_tax_rate + round_trip_impact_rate
+
+        net_post_tax_ret = bounded_gross_ret - total_friction_rate
+        excess_vs_nifty_ret = bounded_gross_ret - df["fwd_5d_nifty_return"].fillna(0.0) - total_friction_rate
+
+        # Dynamic blend weight: driven by each stock's rolling 21d trend purity (ER_21d) rather than fixed 0.65/0.35
+        abs_weight = df["efficiency_ratio_21d"].fillna(0.5).clip(0.25, 0.85)
         five_day_vol = (df["ret_std_21d"] * np.sqrt(5.0)).replace(0, np.nan)
         df["target_5d_info_ratio"] = (
-            (0.65 * net_post_tax_ret + 0.35 * excess_vs_nifty_ret) / five_day_vol
+            (abs_weight * net_post_tax_ret + (1.0 - abs_weight) * excess_vs_nifty_ret) / five_day_vol
         ).clip(-4.5, 4.5)
 
         # Clean up intermediate helper columns

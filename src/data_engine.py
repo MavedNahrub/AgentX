@@ -97,22 +97,45 @@ INDEX_TICKERS = {
 
 @dataclass
 class CapitalConfig:
+    """
+    Scale-Invariant Capital & Statutory Fee Configuration (Scales ₹1 Lakh Retail to ₹10 Crore+ Institutional).
+    Derives slot geometry and round-trip statutory friction directly from Indian CNC tax law + CDSL DP tariff,
+    with zero hardcoded rupee slot cutoffs.
+    """
     initial_capital_inr: float = 100_000.0
-    flat_dp_and_min_charges_inr: float = 20.0
-    max_allowed_fee_drag_pct: float = 0.0025  # 0.25% max round-trip flat fee drag
+    cdsl_dp_flat_sell_inr: float = 15.93       # Statutory CDSL DP ₹13.50 + 18% GST
+    proportional_round_trip_tax_rate: float = 0.002221  # 0.20% STT (Buy+Sell) + 0.015% Stamp + Exch/SEBI/GST
+    max_slots_per_sector: int = 2              # <= 50% sector concentration cap (4-slot core book)
+    target_portfolio_slots: int = 4            # 2 x max_slots_per_sector for balanced diversification
 
     @property
     def min_fee_efficient_slot_inr(self) -> float:
-        # Ensures flat ₹20 DP/brokerage charges stay well within fee drag hurdle
-        return max(25_000.0, self.flat_dp_and_min_charges_inr / 0.0008)
+        # Derived where flat ₹15.93 CDSL DP fee equals the proportional non-STT statutory levy
+        derived_floor = self.cdsl_dp_flat_sell_inr / max(1e-6, (self.proportional_round_trip_tax_rate - 0.00158))
+        return min(self.initial_capital_inr / self.target_portfolio_slots, derived_floor)
 
     @property
     def optimal_slot_count(self) -> int:
-        return max(1, int(np.floor(self.initial_capital_inr / self.min_fee_efficient_slot_inr)))
+        # Maintains 4 diversified slots whenever flat CDSL DP fee stays below proportional round-trip tax
+        dp_drag_at_target = self.cdsl_dp_flat_sell_inr / max(1.0, self.initial_capital_inr / self.target_portfolio_slots)
+        if dp_drag_at_target <= self.proportional_round_trip_tax_rate:
+            return self.target_portfolio_slots
+        return max(1, int(np.floor(self.initial_capital_inr / max(1.0, self.min_fee_efficient_slot_inr))))
 
     @property
     def ideal_slot_size_inr(self) -> float:
         return self.initial_capital_inr / self.optimal_slot_count
+
+    @property
+    def dynamic_round_trip_tax_rate(self) -> float:
+        """Exact statutory round-trip tax rate (decimal) for a slot at the current capital scale."""
+        slot_notional = max(1.0, self.ideal_slot_size_inr)
+        return self.proportional_round_trip_tax_rate + (self.cdsl_dp_flat_sell_inr / slot_notional)
+
+    @property
+    def dynamic_round_trip_tax_pct(self) -> float:
+        """Exact statutory round-trip tax percentage (e.g., ~0.286% at ₹1L, ~0.222% at ₹10Cr)."""
+        return round(self.dynamic_round_trip_tax_rate * 100.0, 4)
 
 
 class HybridDataEngine:

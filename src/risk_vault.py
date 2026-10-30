@@ -246,22 +246,21 @@ class CryptographicRiskVault:
         dd_pct = max(0.0, (peak - float(current_equity_inr)) / peak)
         today_loss_pct = max(0.0, -float(today_pnl_inr) / max(1.0, float(current_equity_inr)))
 
-        # Portfolio 5-day volatility scale derived from the top candidate basket
+        # Portfolio 5-day volatility scale & 1-day 95th-pctl tail excursion derived from the candidate universe
         top_basket = candidate_slice.head(self.capital_cfg.optimal_slot_count)
         if not top_basket.empty and "ret_std_21d" in top_basket.columns:
             port_5d_vol = float((top_basket["ret_std_21d"] * np.sqrt(5.0)).mean())
             daily_tail_95_pct = float((top_basket["empirical_tail_stop_pct"] / np.sqrt(2.5)).mean())
         else:
-            port_5d_vol = 0.032
-            daily_tail_95_pct = 0.020
+            port_5d_vol = float((candidate_slice["ret_std_21d"] * np.sqrt(5.0)).median()) if "ret_std_21d" in candidate_slice.columns else 0.030
+            daily_tail_95_pct = float((candidate_slice["empirical_tail_stop_pct"] / np.sqrt(2.5)).median()) if "empirical_tail_stop_pct" in candidate_slice.columns else 0.020
 
-        port_5d_vol = max(0.015, port_5d_vol)
-        # Daily circuit breaker = portfolio 1-day 95th-pctl tail excursion (bounded within [1.50%, 2.50%] for retail safety)
-        daily_loss_limit_pct = float(np.clip(daily_tail_95_pct, 0.015, 0.025))
+        # Daily circuit breaker = portfolio's own 1-day 95th-percentile empirical tail excursion (zero hardcoded % clips)
+        daily_loss_limit_pct = float(daily_tail_95_pct)
 
         # Continuous exponential throttle M_dd = exp(-DD / Port_5d_Vol)
-        raw_throttle = float(np.exp(-dd_pct / port_5d_vol)) if dd_pct > 0.005 else 1.0
-        throttle_mult = round(float(np.clip(raw_throttle, 0.25, 1.00)), 4)
+        raw_throttle = float(np.exp(-dd_pct / max(1e-4, port_5d_vol))) if dd_pct > 0.0 else 1.0
+        throttle_mult = round(float(raw_throttle), 4)
 
         ks_state = self.kill_switch.get_state()
         daily_breached = today_loss_pct >= daily_loss_limit_pct
@@ -322,6 +321,8 @@ class CryptographicRiskVault:
 
         selected_rows = []
         sector_counts: Dict[str, int] = {}
+        est_slot_notional = max(1.0, deployable_cap / max(1, max_slots))
+        _, dynamic_slot_tax_pct = self.tax_model.compute_round_trip_switch_tax_pct(est_slot_notional, est_slot_notional)
 
         for _, row in candidates_df.sort_values("alpha_rank", ascending=True).iterrows():
             if len(selected_rows) >= max_slots:
@@ -330,14 +331,21 @@ class CryptographicRiskVault:
             sec = str(row["sector"])
             exp_alpha = float(row["expected_5d_alpha_pct"])
 
+            # Per-stock scale-invariant friction: Statutory Round-Trip Tax + Order-Size Amihud Market Impact
+            adv_inr = max(1.0, float(row.get("close", row["exec_vwap_915"])) * float(row.get("volume", 1_000_000.0)))
+            part_rate = float(np.clip(est_slot_notional / adv_inr, 1e-8, 0.25))
+            pvol = float(row.get("parkinson_vol_21d", 0.015))
+            impact_pct = 2.0 * pvol * np.sqrt(part_rate) * 100.0
+            stock_friction_hurdle_pct = dynamic_slot_tax_pct + impact_pct
+
             # Gate 1: Must belong to an ACTIVE_ELIGIBLE sector (weak sectors get ₹0)
             if sec not in active_sectors:
                 continue
             # Gate 2: Max 2 slots (<=50% cap) per NSE sector
-            if sector_counts.get(sec, 0) >= 2:
+            if sector_counts.get(sec, 0) >= self.capital_cfg.max_slots_per_sector:
                 continue
-            # Gate 3: Must have positive expected post-tax alpha (> 0.29% Indian round-trip tax)
-            if exp_alpha <= 0.29:
+            # Gate 3: Must have positive expected post-tax & post-impact alpha (> stock_friction_hurdle_pct)
+            if exp_alpha <= stock_friction_hurdle_pct:
                 continue
             # Gate 4: Must pass Date-Bounded News Catalyst Veto
             news_obj = news_assessments.get(sym)
@@ -363,12 +371,12 @@ class CryptographicRiskVault:
         sel_df = pd.DataFrame(selected_rows).reset_index(drop=True)
         n_sel = len(sel_df)
 
-        # Compute Conviction-to-Tail-Risk Edge Weights: Edge_i = max(0.10, E[Alpha_i] - 0.29) / Stop_Dist_Pct_i
+        # Compute Conviction-to-Tail-Risk Edge Weights: Edge_i = max(eps, E[Alpha_i] - Dynamic_Friction_Pct) / Stop_Dist_Pct_i
         stop_dist_pct = (
             (sel_df["exec_vwap_915"] - sel_df["stop_loss_price"]) / sel_df["exec_vwap_915"].replace(0, np.nan) * 100.0
-        ).clip(1.0, 12.0)
-        net_edge = (sel_df["expected_5d_alpha_pct"] - 0.29).clip(lower=0.15)
-        raw_score = (net_edge / stop_dist_pct).values
+        ).bfill()
+        net_edge = (sel_df["expected_5d_alpha_pct"] - dynamic_slot_tax_pct).clip(lower=0.05)
+        raw_score = (net_edge / stop_dist_pct.replace(0, np.nan).fillna(1.0)).values
 
         # Bound weights within [0.75/N, 1.25/N] and normalize so no slot starves or dominates
         norm_w = raw_score / np.sum(raw_score)

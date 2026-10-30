@@ -266,13 +266,24 @@ class IndiaPaperBroker:
         )
 
     @staticmethod
-    def compute_liquidity_slippage_bps(amihud_illiquidity_z: float = 0.0) -> float:
+    def compute_liquidity_slippage_bps(
+        amihud_illiquidity_z: float = 0.0,
+        order_notional_inr: float = 25_000.0,
+        parkinson_vol_21d: float = 0.015,
+        adv_rupees_21d: float = 5_000_000_000.0,
+    ) -> float:
         """
-        Self-calibrating micro-slippage model anchored to each stock's rolling Amihud illiquidity Z-score.
+        Scale-Invariant Square-Root Market Impact + Amihud Illiquidity Slippage Model:
+        Impact (bps) = 10,000 * sigma_Parkinson * sqrt(Order_Notional_INR / ADV_Rupees_21d) * exp(0.25 * Amihud_Z)
+        Automatically scales from ~1–3 bps on ₹1 Lakh retail orders up to ~15–45 bps on ₹10 Crore+ institutional orders.
         """
         z_clamped = float(np.clip(amihud_illiquidity_z, -2.5, 3.5))
-        logistic_scale = 1.0 / (1.0 + np.exp(-z_clamped))
-        return round(float(1.2 + 3.6 * logistic_scale), 2)
+        illiquidity_mult = float(np.exp(0.25 * z_clamped))
+        participation_rate = float(np.clip(max(1.0, order_notional_inr) / max(1.0, adv_rupees_21d), 1e-8, 0.25))
+        # Exchange minimum tick/spread floor (~1 bps on Nifty 50) + Almgren-Chriss square-root order-size impact
+        tick_spread_bps = float(np.sqrt(max(1e-6, parkinson_vol_21d)) * 10.0 * illiquidity_mult)
+        order_impact_bps = float(10_000.0 * max(1e-4, parkinson_vol_21d) * np.sqrt(participation_rate) * illiquidity_mult)
+        return round(tick_spread_bps + order_impact_bps, 2)
 
     @staticmethod
     def export_broker_api_payloads(packet: SignedOrderPacket) -> Dict[str, Dict[str, object]]:
@@ -428,7 +439,10 @@ class IndiaPaperBroker:
                 f"Canonical HMAC-SHA256 signature verified ({packet.hmac_sha256_signature[:16]}...)",
             )
 
-            slip_bps = self.compute_liquidity_slippage_bps(amihud_illiquidity_z)
+            slip_bps = self.compute_liquidity_slippage_bps(
+                amihud_illiquidity_z=amihud_illiquidity_z,
+                order_notional_inr=float(packet.notional_value_inr),
+            )
             ref_px = float(packet.exec_price_vwap_915)
             side = packet.side.upper().strip()
             qty = int(packet.quantity)
