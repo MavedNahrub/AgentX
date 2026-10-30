@@ -1,0 +1,21 @@
+# Python bytecode & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# IDE & OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Older intermediate pitch deck iterations (keep only final pitch deck)
+AgentX_PS02_Architecture_Pitch_Deck.pptx
+AgentX_PS02_Concise_Pitch_Deck.pptx
+AgentX_PS02_Formal_Pitch_Deck.pptx
+AgentX_PS02_Idea_Pitch_Deck.pptx
+AgentX_PS02_Pitch_Deck.pptx
+AgentX_PS02_Winning_Pitch_Deck.pptx
