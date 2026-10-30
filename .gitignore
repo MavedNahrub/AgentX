@@ -12,6 +12,13 @@ env/
 .DS_Store
 Thumbs.db
 
+# Unverified runtime data caches (Stage 2 will verify & calibrate in live market conditions)
+data/cache/*.parquet
+data/cache/*.sqlite
+data/cache/*.json
+data/cache/*.md
+data/cache/pitch_charts/chart_equity_3tier.png
+
 # Older intermediate pitch deck iterations (keep only final pitch deck)
 AgentX_PS02_Architecture_Pitch_Deck.pptx
 AgentX_PS02_Concise_Pitch_Deck.pptx
