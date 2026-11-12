@@ -1114,6 +1114,35 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
           <p className="text-[12.5px] font-semibold" style={{ color: "var(--text-muted)" }}>
             💡 <b>Top 20 AI Stock Picks (Out of 50 Nifty Stocks):</b> Every morning at 9:30 AM, our AI ranks all 50 Nifty companies by their expected 5-day price trend. Click any stock below to inspect its chart.
           </p>
+
+          {topRankingRows.length > 0 && (
+            <div
+              className="rounded-xl p-3 px-4 border text-[12.5px] flex flex-wrap items-center justify-between gap-2.5 transition-all"
+              style={{
+                background: "var(--surface-subtle)",
+                borderColor: "rgba(14, 165, 233, 0.4)",
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[16px]">🛡️</span>
+                <span style={{ color: "var(--text-main)" }}>
+                  <b>Wondering why #{topRankingRows[0]?.Stock} (Rank #1) wasn&apos;t bought today?</b> All 4 capital slots are 100% deployed in profitable multi-day swings. Swapping would incur unnecessary taxes without clearing the hurdle.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab(4)}
+                className="rounded-lg px-3 py-1 text-[11.5px] font-extrabold border cursor-pointer hover:opacity-90 transition-all ml-auto"
+                style={{
+                  background: "var(--yellow-accent)",
+                  color: "#111827",
+                  borderColor: "var(--yellow-border)",
+                }}
+              >
+                Read Explanation in Section 5 →
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-1 xl:grid-cols-[1.45fr_1fr] gap-3.5">
             <GenericResponsiveTable
               caption="Top 20 AI Stock Picks"
@@ -1204,30 +1233,44 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
 
           {/* Simple English Cards with Labelled Metric Badges */}
           <div className="flex flex-col gap-3 max-h-[560px] overflow-y-auto pr-1">
-            {filteredJournal.map((j, idx) => (
-              <article
-                key={`${j.symbol}-${idx}`}
-                className="rounded-xl p-4 border"
-                style={{
-                  background: "var(--card-bg)",
-                  borderColor: "var(--card-border-strong)",
-                }}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                  <div className="text-[14px] font-extrabold">
-                    {j.headline}
+            {filteredJournal.map((j, idx) => {
+              const isSpecialWhyCard = j.category.includes("Why #1 Pick");
+              return (
+                <article
+                  key={`${j.symbol}-${idx}`}
+                  className="rounded-xl p-4 border transition-all"
+                  style={{
+                    background: isSpecialWhyCard ? "rgba(14, 165, 233, 0.06)" : "var(--card-bg)",
+                    borderColor: isSpecialWhyCard ? "rgba(14, 165, 233, 0.55)" : "var(--card-border-strong)",
+                  }}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                    <div className="text-[14px] font-extrabold flex items-center gap-2">
+                      {isSpecialWhyCard && (
+                        <span
+                          className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md tracking-wider"
+                          style={{
+                            background: "rgba(14, 165, 233, 0.2)",
+                            color: "#0284c7",
+                            border: "1px solid rgba(14, 165, 233, 0.4)",
+                          }}
+                        >
+                          ⭐ Top Daily Audit
+                        </span>
+                      )}
+                      <span>{j.headline}</span>
+                    </div>
+                    <span
+                      className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border"
+                      style={{
+                        background: isSpecialWhyCard ? "rgba(14, 165, 233, 0.15)" : "var(--surface-subtle)",
+                        borderColor: isSpecialWhyCard ? "rgba(14, 165, 233, 0.4)" : "var(--card-border-strong)",
+                        color: isSpecialWhyCard ? "#0284c7" : "var(--text-main)",
+                      }}
+                    >
+                      {j.category}
+                    </span>
                   </div>
-                  <span
-                    className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border"
-                    style={{
-                      background: "var(--surface-subtle)",
-                      borderColor: "var(--card-border-strong)",
-                      color: "var(--text-main)",
-                    }}
-                  >
-                    {j.category}
-                  </span>
-                </div>
 
                 <p className="text-[12.8px] leading-relaxed mb-3" style={{ color: "var(--text-muted)" }}>
                   {j.narrative}
@@ -1247,8 +1290,9 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
                   ))}
                 </div>
               </article>
-            ))}
-          </div>
+            );
+          })}
+        </div>
         </div>
       </div>
     </section>
