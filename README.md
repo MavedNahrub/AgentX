@@ -106,7 +106,6 @@ AgentX/
 ├── reports/
 │   ├── AgentX_Bright_Pitch_Deck.pptx #   Final 6-slide pitch deck
 │   └── live_6day_test/               #   Live test session logs & proofs
-├── app.py                            #   Streamlit app entry point
 ├── ARCHITECTURE.md                   #   Detailed architecture document
 ├── TRAINING_GUIDE.md                 #   Model training specification
 └── requirements.txt                  #   Python dependencies

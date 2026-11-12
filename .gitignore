@@ -51,6 +51,8 @@ AgentX_Keynote_*.pptx
 # Misc generated artifacts
 script.pdf
 *.pdf
+app.py
+.streamlit/
 
 # Binary data files (parquet) in reports
 reports/**/*.parquet

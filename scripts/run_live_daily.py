@@ -503,7 +503,7 @@ def run_evening_cycle(force_refresh: bool = False) -> None:
         extra_meta={"cross_sectional_spread": spread_meta, "exits_triggered": exits},
     )
     print("-" * 84)
-    print("Launch Interactive Dashboard: .\\.venv\\Scripts\\streamlit run app.py")
+    print("Launch Interactive Dashboard: .\\scripts\\launch_web_platform.ps1 (http://localhost:3000)")
 
 
 def main() -> None:
