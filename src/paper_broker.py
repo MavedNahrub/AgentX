@@ -286,7 +286,7 @@ class IndiaPaperBroker:
         Ensures that previously recorded live sessions (such as the 2026-11-06 recorded session
         in `reports/live_6day_test/evening_mtm_evaluation_2026-11-06.json` plus the 2026-11-06
         ULTRACEMCO morning trade) remain permanently in `tested_positions_archive` and `order_fill_ledger`
-        so resetting for a new simulation window NEVER wipes out the 2026-11-06 Streamlit history.
+        so resetting for a new simulation window NEVER wipes out the 2026-11-06 broker ledger history.
         """
         try:
             # 1. Preserve the 2026-11-06 ULTRACEMCO morning tested position

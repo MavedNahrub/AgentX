@@ -1419,7 +1419,7 @@ def run_stage_session_375m(
     curve_df = pd.DataFrame(minute_curve_rows)
     curve_path = OUT_DIR / f"intraday_375m_curve_{target_date_str}.parquet"
     curve_df.to_parquet(curve_path, index=False)
-    # Also save as latest curve for instant Streamlit rendering
+    # Also save as latest curve for instant frontend rendering
     curve_df.to_parquet(OUT_DIR / "intraday_375m_curve_latest.parquet", index=False)
 
     # Rebuild continuous multi-session curve (`intraday_375m_curve_combined_6sessions.parquet`) across all completed sessions

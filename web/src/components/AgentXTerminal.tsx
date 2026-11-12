@@ -466,7 +466,7 @@ export default function AgentXTerminal() {
 
         {/* 2. RIGHT MAIN 3-ROW WORKSPACE */}
         <div className="flex flex-col gap-3.5 min-w-0">
-          {/* Operator Drawer (Replaces Streamlit Sidebar cleanly inline when toggled) */}
+          {/* Operator Drawer (Quick Controls & Calibration Toggles) */}
           {showOpDrawer && (
             <div
               className="ax-card p-3.5 px-4 flex flex-wrap items-center justify-between gap-3 border-2"

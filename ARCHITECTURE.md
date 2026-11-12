@@ -62,9 +62,9 @@ flowchart TD
         R4 --> B1 --> B2 --> B3
     end
 
-    subgraph S7["Section 7: Locked-Pointer AST Journal & Command Center"]
+    subgraph S7["Section 7: Locked-Pointer AST Journal & Web Terminal"]
         J1["LockedTradeFactAST Pydantic Schema (Plain-English Audit Narrator)"]
-        J2["Streamlit + Plotly Command Center Interface"]
+        J2["Next.js 15 + TradingView Financial Terminal (FastAPI + WebSocket)"]
         B3 & A3 --> J1 --> J2
     end
 ```
