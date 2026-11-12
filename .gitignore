@@ -24,9 +24,11 @@ web/next-env.d.ts
 Thumbs.db
 desktop.ini
 
-# Runtime data caches (large binary files)
+# Runtime data caches (large binary parquet files)
 data/cache/*.parquet
 data/cache/*.sqlite
+!data/cache/paper_broker_ledger.sqlite
+!data/cache/risk_vault_state.sqlite
 data/cache/*.json
 data/cache/*.md
 data/cache/pitch_charts/
@@ -56,10 +58,6 @@ app.py
 
 # Binary data files (parquet) in reports
 reports/**/*.parquet
-
-# Runtime state files
-reports/**/live_375m_state.json
-reports/**/session_queue_state.json
 
 # Agent config (private, not project code)
 AGENTS.md
