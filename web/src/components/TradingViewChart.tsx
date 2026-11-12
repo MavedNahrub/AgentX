@@ -254,7 +254,7 @@ export default function TradingViewChart({
             lineWidth: 1,
             lineStyle: LineStyle.Dotted,
             axisLabelVisible: true,
-            title: "Entry VWAP",
+            title: "Entry Price",
           });
         }
 

@@ -393,8 +393,8 @@ class HybridDataEngine:
 
     def _fetch_real_15m_opening_vwap(self, symbols: List[str], intraday_days: int = 55) -> pd.DataFrame:
         """
-        Downloads 15-minute intraday candles and extracts the 09:15:00 IST opening bar
-        Typical Price / VWAP = (High_915 + Low_915 + Close_915) / 3.
+        Downloads 15-minute intraday candles and extracts the actual 09:30 AM IST execution price
+        (Close price of the 09:15-09:30 AM opening discovery bar).
         """
         try:
             raw_15m = yf.download(
@@ -427,9 +427,7 @@ class HybridDataEngine:
                         continue
                     open_bars["date"] = open_bars["ts_ist"].dt.tz_localize(None).dt.normalize()
                     open_bars["symbol"] = sym.replace(".NS", "")
-                    open_bars["real_15m_vwap"] = (
-                        (open_bars["Open"] + open_bars["High"] + open_bars["Low"] + open_bars["Close"]) / 4.0
-                    ).round(2)
+                    open_bars["real_15m_vwap"] = open_bars["Close"].round(2)
                     records.append(open_bars[["date", "symbol", "real_15m_vwap"]])
                 except Exception:
                     continue

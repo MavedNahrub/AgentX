@@ -13,7 +13,7 @@ interface JudgeTourAndKpisProps {
 }
 
 const TERMS = [
-  "📐 Fair Average Price (VWAP): The average price weighted by trading volume across the day (Gold line on chart). Buying near this line avoids overpaying.",
+  "📐 Fair Average Price (VWAP): The volume-weighted average price across the day (Gold line on chart). Buying near this line avoids overpaying.",
   "🔒 Safety Stop-Loss (Floor): An automatic sell floor that protects your money if a stock drops. As the stock rises, this safety floor moves UP to lock in profit.",
   "🎯 Automatic Target & Safety Orders (GTT): A paired broker order that automatically sells at your Target Price for profit OR at your Safety Floor to prevent a big loss.",
   "🧠 5-Day AI Stock Ranker: Every morning, our AI scores all 50 Nifty stocks on their expected 5-day price trend and picks the strongest leaders.",

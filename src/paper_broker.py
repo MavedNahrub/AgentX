@@ -613,8 +613,8 @@ class IndiaPaperBroker:
                     packet.order_id,
                     packet.symbol,
                     side,
-                    "4_ROUTED_NSE_915_VWAP",
-                    f"Matched against 9:15–9:30 AM 15m Opening VWAP ₹{ref_px:.2f} + {slip_bps:.2f} bps Amihud impact -> Fill ₹{fill_px:.2f}",
+                    "4_ROUTED_NSE_MARKET",
+                    f"Matched against 09:30 AM Market Price ₹{ref_px:.2f} + {slip_bps:.2f} bps Amihud impact -> Fill ₹{fill_px:.2f}",
                 )
 
                 new_cash = round(cash_bal - total_cash_needed, 2)

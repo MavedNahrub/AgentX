@@ -297,7 +297,7 @@ def build_causal_morning_telemetry(
     09:30 AM on `target_date_str` so that at 09:30 AM decision time:
       - `stocks_df` for `date < target_date_str` has historical daily bars.
       - `stocks_df` for `date == target_date_str` has ONLY the 09:15-09:30 AM 15m Opening candle
-        (`open`, `high`, `low`, `close = opening_15m_vwap`, `real_15m_vwap = opening_15m_vwap`).
+        (`open`, `high`, `low`, `close = c15 (actual 09:30 spot price)`, `real_15m_vwap = c15`).
       - Zero post-09:30 AM prices or future dates exist anywhere in memory!
     """
     target_dt = pd.Timestamp(target_date_str)
@@ -315,16 +315,16 @@ def build_causal_morning_telemetry(
         )
         for _, r in first_15m.iterrows():
             o15, h15, l15, c15 = float(r["open"]), float(r["high"]), float(r["low"]), float(r["close"])
-            tp_vwap = round((o15 + h15 + l15 + c15) / 4.0, 2)
+            spot_0930 = round(c15, 2)
             clv_15m = round((c15 - l15) / max(1e-4, h15 - l15), 4) if (h15 - l15) > 1e-4 else 0.50
             body_15m_pct = round((c15 / max(1e-4, o15) - 1.0) * 100.0, 4)
             open_bar_map[str(r["symbol"])] = {
                 "open": round(o15, 2),
                 "high": round(h15, 2),
                 "low": round(l15, 2),
-                "close": tp_vwap,
+                "close": spot_0930,
                 "volume": float(r["volume"]),
-                "real_15m_vwap": tp_vwap,
+                "real_15m_vwap": spot_0930,
                 "opening_15m_clv": clv_15m,
                 "opening_15m_body_pct": body_15m_pct,
             }

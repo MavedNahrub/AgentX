@@ -521,7 +521,7 @@ def format_friendly_events(raw_events: list[dict[str, Any]], fallback_date: str 
             .replace("-> Stop Ratcheted UP", "— Safety Floor raised from")
             .replace("->", "to")
             .replace("09:30 AM Causal Orders Locked:", "Morning AI portfolio selected:")
-            .replace("15m Opening VWAP Window Active.", "Watching first 15 minutes of trading.")
+            .replace("15m Opening VWAP Window Active.", "Watching opening price discovery window.")
         )
         friendly.append(
             {

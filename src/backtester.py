@@ -13,7 +13,7 @@ Responsibilities:
      + Conviction-to-Tail-Risk 4-Slot Sizer with Elastic Cash Spillover + Max 2 Slots/Sector
      + 3-Bar Hysteresis & Exact Indian Switch-Tax + Alpha SE Smart Eviction + Asymmetric Stop/Target Exits)
 2. Settles every simulated trade with:
-   - Next-Morning 9:15-9:30 AM 15m VWAP execution (`exec_vwap_915`) + Amihud liquidity micro-slippage
+   - Next-Morning 09:30 AM Spot Close execution (`exec_vwap_915`) + Amihud liquidity micro-slippage
    - Exact Indian CNC statutory taxes (`IndianCNCTaxModel`: 0.1% STT on BUY/SELL, 0.015% Stamp Duty,
      NSE/SEBI fees + 18% GST, and flat ₹15.93 CDSL DP charge per SELL scrip)
 3. Tracks cumulative "Rupees Saved by Blocking Churn" and exports:
@@ -310,7 +310,7 @@ class WalkForwardBacktester:
     ) -> Tuple[List[float], pd.DataFrame, Dict[str, float]]:
         """
         Simulates Tier 3: AgentX v2.0 Autonomous Agent:
-        - Signal generated at Day t close -> Executed at Day t+1 9:15-9:30 AM 15m VWAP (`exec_vwap_915`)
+        - Signal generated at Day t close -> Executed at Day t+1 09:30 AM Spot Close (`exec_vwap_915`)
         - Self-Calibrating 126d Quantile Market-Breadth & VIX Regime Shield (`regime_deploy_ok`)
         - Dynamic Sector Hurdle (Tax + Alpha SE) + Max 2 Slots (<=50%) per NSE Sector
         - Conviction-to-Tail-Risk 4-Slot Sizer + Two-Pass Elastic Whole-Share Cash Spillover (100% Nifty 50 eligible)
@@ -670,7 +670,7 @@ def run_section_6b_verification() -> None:
     d_start = pd.Timestamp(equity_df["date"].iloc[0]).strftime("%Y-%m-%d")
     d_end = pd.Timestamp(equity_df["date"].iloc[-1]).strftime("%Y-%m-%d")
     print(f"[1] OUT-OF-SAMPLE WALK-FORWARD EVALUATION WINDOW: {d_start} -> {d_end} ({len(equity_df)} Trading Days)")
-    print(f"  • Execution Anchor : Day t Close Signal -> Day t+1 9:15-9:30 AM 15m VWAP Fill + Amihud Liquidity Micro-Slippage")
+    print(f"  • Execution Anchor : Day t Close Signal -> Day t+1 09:30 AM Spot Close Fill + Amihud Liquidity Micro-Slippage")
     print(f"  • Tax Settlement   : Exact Indian CNC Statutory Taxes (0.1% STT + 0.015% Stamp + NSE/SEBI/GST + ₹15.93 CDSL DP)")
 
     print("\n[2] 3-TIER COMPARATIVE PERFORMANCE TABLE (POST-TAX & POST-SLIPPAGE):")

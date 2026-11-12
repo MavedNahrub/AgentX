@@ -205,7 +205,7 @@ class ZeroHallucinationTradeJournal:
             narrative = (
                 f"On {as_of_date}, AgentX allocated Slot #{slot_id} to {sym} ({sec}) under the "
                 f"{strat} playbook with {tok_conv} cross-sectional conviction. "
-                f"{spill_clause}the Risk Vault sized {tok_qty} whole shares at the 9:15–9:30 AM Opening VWAP "
+                f"{spill_clause}the Risk Vault sized {tok_qty} whole shares at the 09:30 AM Market Price "
                 f"of {tok_px} (Gross Notional {tok_notional} + Exact Indian CNC Statutory Buy Tax {tok_tax}). "
                 f"Why the AI picked {sym}: Expected 5-day post-tax alpha is {tok_alpha} (clearing the {tok_hurdle} "
                 f"Tax + Standard Error gate), driven by (1) {d1}, (2) {d2}, and (3) {d3}, which outweighed the "
@@ -581,7 +581,7 @@ class ZeroHallucinationTradeJournal:
                 f"{tok_in} -> {tok_out} | Net {tok_pnl} ({tok_ret}) [{reason}]"
             )
             narrative = (
-                f"Entered {tok_qty} whole shares of {sym} ({sec}) on {in_dt} at the 9:15 AM Opening VWAP "
+                f"Entered {tok_qty} whole shares of {sym} ({sec}) on {in_dt} at the 09:30 AM Market Price "
                 f"of {tok_in} under the {strat} playbook. Exited on {out_dt} at {tok_out} via `{reason}`. "
                 f"After paying {tok_tax} in round-trip Indian CNC statutory taxes (STT + Stamp + GST + "
                 f"₹15.93 CDSL DP fee), the trade delivered {tok_pnl} net rupee profit ({tok_ret} net return)."
