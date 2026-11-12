@@ -61,6 +61,11 @@ class KillSwitchPayload(BaseModel):
 
 class GoLivePayload(BaseModel):
     target_date: Optional[str] = None
+    additional_capital_inr: float = 0.0
+
+
+class DepositPayload(BaseModel):
+    amount_inr: float
 
 
 _PIPELINE_CACHE: dict[str, Any] = {"data": None, "mtime_sig": None}
@@ -1852,9 +1857,21 @@ def api_set_kill_switch(body: KillSwitchPayload) -> dict[str, Any]:
 
 @app.post("/api/session/go-live")
 def api_go_live(body: Optional[GoLivePayload] = None) -> dict[str, Any]:
-    """Start or resume today's 09:15-15:30 live trading session (pre-open arming, mid-day catch-up, or live 1m loop)."""
+    """Start or resume today's 09:15-15:30 live trading session with optional wallet capital top-up."""
     target_date = body.target_date if body and body.target_date else None
-    return live_controller.start(target_date_str=target_date)
+    add_cap = float(body.additional_capital_inr or 0.0) if body else 0.0
+    return live_controller.start(target_date_str=target_date, additional_capital_inr=add_cap)
+
+
+@app.post("/api/wallet/deposit")
+def api_wallet_deposit(body: DepositPayload) -> dict[str, Any]:
+    """Deposit additional capital into the trading wallet."""
+    if body.amount_inr <= 0:
+        raise HTTPException(status_code=400, detail="Deposit amount must be > 0")
+    broker = IndiaPaperBroker(db_path="data/cache/paper_broker_ledger.sqlite")
+    summary = broker.deposit_capital(body.amount_inr)
+    _WORKSTATION_CACHE["ledger_sig"] = None
+    return {"status": "deposited", "amount_inr": body.amount_inr, "account_summary": summary}
 
 
 @app.post("/api/session/stop-live")

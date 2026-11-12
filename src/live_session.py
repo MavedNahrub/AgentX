@@ -948,8 +948,14 @@ class LiveSessionController:
         snap["market_minute_now"] = market_minute_at(now)
         return snap
 
-    def start(self, target_date_str: Optional[str] = None) -> dict:
+    def start(self, target_date_str: Optional[str] = None, additional_capital_inr: float = 0.0) -> dict:
         today = target_date_str or get_ist_now().strftime("%Y-%m-%d")
+        if additional_capital_inr > 0:
+            broker = IndiaPaperBroker(db_path=DB_PATH)
+            broker.deposit_capital(additional_capital_inr)
+            if self._on_invalidate:
+                self._on_invalidate()
+
         ok_day, reason = is_trading_day(today)
         if not ok_day:
             with self._lock:

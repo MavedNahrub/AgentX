@@ -31,6 +31,9 @@ export default function AgentXTerminal() {
 
   const [showTour, setShowTour] = useState<boolean>(true);
   const [showOpDrawer, setShowOpDrawer] = useState<boolean>(false);
+  const [showCapitalModal, setShowCapitalModal] = useState<boolean>(false);
+  const [depositAmount, setDepositAmount] = useState<number>(0);
+  const [customAmountStr, setCustomAmountStr] = useState<string>("");
   const [opBusy, setOpBusy] = useState<boolean>(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -245,19 +248,34 @@ export default function AgentXTerminal() {
     return () => clearInterval(id);
   }, [fetchLiveStatus, fetchWorkstation]);
 
-  const handleGoLive = async () => {
+  const handleGoLiveClick = () => {
+    setDepositAmount(0);
+    setCustomAmountStr("");
+    setShowCapitalModal(true);
+  };
+
+  const executeGoLive = async (topUpInr: number) => {
+    setShowCapitalModal(false);
     setOpBusy(true);
-    showToast("🟢 Arming live NSE trading session (09:15 AM - 03:30 PM IST)...");
+    if (topUpInr > 0) {
+      showToast(`💳 Depositing ₹${topUpInr.toLocaleString("en-IN")} & arming live session...`);
+    } else {
+      showToast("🟢 Arming live NSE trading session (09:15 AM - 03:30 PM IST)...");
+    }
     try {
       const res = await fetch("/api/session/go-live", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ additional_capital_inr: topUpInr }),
       });
       if (res.ok) {
         const st: LiveSessionState = await res.json();
         setLiveSession(st);
-        showToast(st.message || "Live trading session active!");
+        showToast(
+          topUpInr > 0
+            ? `✅ Deposited ₹${topUpInr.toLocaleString("en-IN")}! Live session active.`
+            : (st.message || "Live trading session active!")
+        );
         void fetchWorkstation(false);
       } else {
         showToast("⚠️ Could not start live trading session.");
@@ -265,6 +283,10 @@ export default function AgentXTerminal() {
     } finally {
       setOpBusy(false);
     }
+  };
+
+  const handleGoLive = () => {
+    handleGoLiveClick();
   };
 
   const handleStopLive = async () => {
@@ -1436,6 +1458,193 @@ export default function AgentXTerminal() {
 
       {/* Bottom 5-Tab Broker Trading & Audit Dock */}
       <BrokerDock ws={ws} isDark={isDark} onSelectSymbol={handleSelectSymbol} />
+
+      {/* Capital Allocation & Top-Up Modal before Starting Live Session */}
+      {showCapitalModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="capital-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm"
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl p-5 sm:p-6 border shadow-2xl flex flex-col gap-4 text-left transition-all"
+            style={{
+              background: "var(--card-bg)",
+              borderColor: "var(--card-border-strong)",
+            }}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: "var(--grid-line)" }}>
+              <div className="flex items-center gap-2.5">
+                <span className="text-[22px]">💼</span>
+                <div>
+                  <h3 id="capital-modal-title" className="text-[15px] font-black" style={{ color: "var(--text-main)" }}>
+                    Start Live Trading Session
+                  </h3>
+                  <p className="text-[11.5px] font-semibold" style={{ color: "var(--text-muted)" }}>
+                    Capital Allocation & Wallet Top-Up
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCapitalModal(false)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center border-none cursor-pointer text-[14px] font-bold"
+                style={{ background: "var(--surface-subtle)", color: "var(--text-muted)" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Current Account Balances */}
+            <div
+              className="rounded-xl p-3 px-3.5 border flex flex-col gap-1.5"
+              style={{ background: "var(--surface-subtle)", borderColor: "var(--card-border-strong)" }}
+            >
+              <div className="text-[10.5px] font-black uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Current Trading Wallet
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-[11.5px]">
+                <div>
+                  <div style={{ color: "var(--text-muted)" }}>Available Cash</div>
+                  <div className="text-[13.5px] font-black" style={{ color: "var(--green-pnl)" }}>
+                    ₹{(liveTick?.cash ?? summary.cash).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--text-muted)" }}>Invested in Stocks</div>
+                  <div className="text-[13.5px] font-black" style={{ color: "var(--text-main)" }}>
+                    ₹{(liveTick?.invested_inr ?? summary.invested_inr).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--text-muted)" }}>Total Portfolio Equity</div>
+                  <div className="text-[13.5px] font-black" style={{ color: "var(--text-main)" }}>
+                    ₹{(liveTick?.equity ?? summary.equity).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Prompt & Explanation */}
+            <div>
+              <p className="text-[12.5px] font-bold mb-1.5 leading-snug" style={{ color: "var(--text-main)" }}>
+                Would you like to invest more capital into your wallet for this session?
+              </p>
+              <p className="text-[11.5px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                💡 <b>Why add capital?</b> If all 4 slots are currently held in winning swing trades, adding capital creates fresh slot capacity so the AI can buy today&apos;s new #1 ranked stock immediately without waiting for existing trades to close.
+              </p>
+            </div>
+
+            {/* Quick Choice Buttons */}
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: "₹0", amount: 0, sub: "Current Funds" },
+                { label: "+₹25,000", amount: 25000, sub: "+1 Full Slot" },
+                { label: "+₹50,000", amount: 50000, sub: "+2 Full Slots" },
+                { label: "+₹1,00,000", amount: 100000, sub: "+4 Full Slots" },
+              ].map((opt) => {
+                const active = depositAmount === opt.amount && customAmountStr === "";
+                return (
+                  <button
+                    key={opt.amount}
+                    type="button"
+                    onClick={() => {
+                      setDepositAmount(opt.amount);
+                      setCustomAmountStr("");
+                    }}
+                    className="rounded-xl p-2.5 border text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-0.5"
+                    style={{
+                      background: active ? "var(--yellow-accent)" : "var(--input-bg)",
+                      color: active ? "#111827" : "var(--text-main)",
+                      borderColor: active ? "var(--yellow-border)" : "var(--card-border-strong)",
+                    }}
+                  >
+                    <div className="text-[12.5px] font-black">{opt.label}</div>
+                    <div className="text-[10px] opacity-80">{opt.sub}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Amount Input */}
+            <div className="flex items-center gap-2">
+              <label htmlFor="custom-deposit-inr" className="text-[11.5px] font-bold" style={{ color: "var(--text-muted)" }}>
+                Or Custom Amount:
+              </label>
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-bold" style={{ color: "var(--text-muted)" }}>
+                  ₹
+                </span>
+                <input
+                  id="custom-deposit-inr"
+                  type="number"
+                  placeholder="e.g. 35000"
+                  value={customAmountStr}
+                  onChange={(e) => {
+                    setCustomAmountStr(e.target.value);
+                    const val = parseFloat(e.target.value);
+                    setDepositAmount(isNaN(val) || val < 0 ? 0 : val);
+                  }}
+                  className="w-full rounded-xl pl-7 pr-3 py-1.5 text-[12px] font-bold border outline-none"
+                  style={{
+                    background: "var(--input-bg)",
+                    borderColor: "var(--card-border-strong)",
+                    color: "var(--text-main)",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Live Preview if depositing */}
+            {depositAmount > 0 && (
+              <div
+                className="rounded-xl p-2.5 px-3 border text-[11.5px] font-bold flex items-center justify-between"
+                style={{
+                  background: "rgba(16, 185, 129, 0.08)",
+                  borderColor: "rgba(16, 185, 129, 0.35)",
+                  color: "var(--green-pnl)",
+                }}
+              >
+                <span>💳 Adding: +₹{depositAmount.toLocaleString("en-IN")}</span>
+                <span>
+                  New Cash: ₹{((liveTick?.cash ?? summary.cash) + depositAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t" style={{ borderColor: "var(--grid-line)" }}>
+              <button
+                type="button"
+                onClick={() => setShowCapitalModal(false)}
+                className="rounded-xl px-4 py-2 text-[12px] font-bold border cursor-pointer"
+                style={{
+                  background: "var(--input-bg)",
+                  borderColor: "var(--card-border-strong)",
+                  color: "var(--text-main)",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={opBusy}
+                onClick={() => executeGoLive(depositAmount)}
+                className="rounded-xl px-4 py-2 text-[12px] font-black text-white border-none cursor-pointer transition-all shadow-md"
+                style={{ background: "var(--green-btn)" }}
+              >
+                {opBusy
+                  ? "⏳ Starting..."
+                  : depositAmount > 0
+                  ? `💳 Deposit ₹${depositAmount.toLocaleString("en-IN")} & Start Live Session`
+                  : "🚀 Start Session with Current Balance"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       {toastMsg && (

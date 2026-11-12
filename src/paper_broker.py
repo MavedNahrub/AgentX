@@ -67,11 +67,13 @@ class IndiaPaperBroker:
 
     def __init__(
         self,
-        vault: CryptographicRiskVault,
+        vault: Optional[CryptographicRiskVault] = None,
         db_path: str | Path = "data/cache/paper_broker_ledger.sqlite",
         initial_capital_inr: float = 100_000.0,
         reset_account: bool = False,
     ):
+        if vault is None:
+            vault = CryptographicRiskVault(capital_cfg=CapitalConfig(initial_capital_inr=initial_capital_inr))
         self.vault = vault
         self.tax_model = IndianCNCTaxModel()
         self.db_path = Path(db_path)
@@ -1108,6 +1110,25 @@ class IndiaPaperBroker:
             "current_drawdown_pct": dd_pct,
             "open_slots_count": int(len(pos_df)),
         }
+
+    def deposit_capital(self, amount_inr: float) -> Dict[str, float]:
+        """Deposit additional capital into trading wallet (cash_balance_inr + initial_capital_inr)."""
+        if amount_inr <= 0:
+            return self.get_account_summary()
+        now_utc = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE account_state
+                SET initial_capital_inr = initial_capital_inr + ?,
+                    cash_balance_inr = cash_balance_inr + ?,
+                    updated_at_utc = ?
+                WHERE id = 1
+                """,
+                (amount_inr, amount_inr, now_utc),
+            )
+            conn.commit()
+        return self.get_account_summary()
 
 
 def run_section_6a_verification() -> None:
