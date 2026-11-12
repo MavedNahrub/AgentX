@@ -2,7 +2,7 @@
 
 An end-to-end autonomous trading system that selects, sizes, enters, monitors, and exits 5-day swing trades on NSE Nifty 50 stocks using ₹1,00,000 retail capital. Every threshold, stop-loss, and target self-calibrates daily from live market data — **zero hardcoded magic numbers**.
 
-> **+19.58% net return across 12 live sessions** — after deducting every Indian statutory tax (STT, CDSL DP, Stamp Duty, GST). Nifty 50 returned +9.17% over the same window.
+> **+20.22% net return across 13 live sessions** — after deducting every Indian statutory tax (STT, CDSL DP, Stamp Duty, GST). Nifty 50 returned +9.19% over the same window.
 
 ---
 
@@ -10,8 +10,8 @@ An end-to-end autonomous trading system that selects, sizes, enters, monitors, a
 
 | Metric | Value |
 |--------|-------|
-| Net Return (After All Taxes) | +19.58% (₹1,00,000 → ₹1,19,576) |
-| Alpha Over Nifty 50 | +10.40% (2.13× the benchmark) |
+| Net Return (After All Taxes) | +20.22% (₹1,00,000 → ₹1,20,215) |
+| Alpha Over Nifty 50 | +11.02% (2.20× the benchmark) |
 | Closed Swing Trades Won | 20 / 20 |
 | 6-Month OOS Sharpe Ratio | 2.91 |
 | Maximum Drawdown | -2.84% |
