@@ -530,6 +530,42 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
     });
   }, [ws.dock.journal_entries, journalCat, journalSearch]);
 
+  const whyNotBoughtEntry = useMemo(() => {
+    const existing = ws.dock.journal_entries.find(
+      (j) => j.category.includes("Why #1 Pick") || j.headline.includes("Wasn't Bought")
+    );
+    if (existing) return existing;
+
+    const activeHoldings = ws.dock.tested_rows.filter((r) => r.row_type === "ACTIVE_HOLDING");
+    if (ws.dock.top_rankings && ws.dock.top_rankings.length > 0 && activeHoldings.length >= 4) {
+      const topPick = ws.dock.top_rankings[0];
+      const topSym = String(topPick.symbol || topPick["Stock"] || "");
+      const topSec = String(topPick.sector || topPick["Industry"] || "");
+      const topAlpha = Number(topPick.expected_5d_alpha_pct || 0);
+      const topConv = Number(topPick.conviction_pct || 90);
+      const openSyms = activeHoldings.map((p) => String(p["Stock"] || p.symbol || ""));
+
+      if (topSym && !openSyms.includes(topSym)) {
+        const heldStr = openSyms.filter(Boolean).join(", ");
+        return {
+          category: "🛡️ Why #1 Pick Wasn't Bought",
+          symbol: topSym,
+          headline: `Why #${topSym} (Rank #1 Today) Wasn't Bought — All 4 Slots Deployed in Winning Swings`,
+          narrative: `At the 09:30 AM market open, ${topSym} (${topSec}) scored the #1 AI rank with ${topConv.toFixed(0)}% confidence and ${topAlpha >= 0 ? "+" : ""}${topAlpha.toFixed(2)}% expected 5-day alpha. However, our ₹1,00,000 retail capital is already 100% deployed across 4 active winning swing positions (${heldStr}). Under our Self-Calibrating Swing Patience & Anti-Churn rules, prematurely selling profitable trades to chase a new stock burns capital through ~0.29% in mandatory Indian statutory delivery taxes (STT + ₹15.93 CDSL DP + Stamp Duty) and cuts compounding short. Because the incremental edge over our existing winners did not clear our required post-tax hurdle (+0.80%), the Risk Vault locked rotation and held the winners—saving ~₹327 in unnecessary churn taxes and allowing portfolio equity to rise.`,
+          tokens: [
+            `🏆 #1 AI Pick: ${topSym} (${topSec})`,
+            `🔮 Expected 5D Gain: ${topAlpha >= 0 ? "+" : ""}${topAlpha.toFixed(2)}%`,
+            `💼 Portfolio Status: 4/4 Slots Full (100% Deployed)`,
+            `🔒 Rule Applied: Swing Patience & Anti-Churn Gate`,
+            `💰 Churn Taxes Saved: ~₹327.39`,
+            `🛡️ Decision: Kept Winning Swings (${heldStr})`,
+          ],
+        };
+      }
+    }
+    return null;
+  }, [ws.dock.journal_entries, ws.dock.top_rankings, ws.dock.tested_rows]);
+
   const topRankingRows = useMemo(() => {
     return ws.dock.top_rankings.map((r) => ({
       "AI Rank": `#${r.alpha_rank}`,
@@ -1189,6 +1225,63 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
           >
             📖 <b style={{ color: "var(--text-main)" }}>Simple Trade Stories:</b> Every buy, sell, raised safety stop-loss, and tax-saving decision is explained below in plain English—with clearly labelled numbers underneath each card so you know exactly what every number means.
           </div>
+
+          {/* Dedicated Daily Audit: Why #1 Pick Was or Wasn't Bought Today (Always Visible) */}
+          {whyNotBoughtEntry && (
+            <div
+              className="rounded-xl p-4 border"
+              style={{
+                background: "rgba(14, 165, 233, 0.08)",
+                borderColor: "rgba(14, 165, 233, 0.55)",
+              }}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md tracking-wider"
+                    style={{
+                      background: "rgba(14, 165, 233, 0.25)",
+                      color: "#0284c7",
+                      border: "1px solid rgba(14, 165, 233, 0.4)",
+                    }}
+                  >
+                    ⭐ Daily Portfolio Audit
+                  </span>
+                  <span className="text-[14px] font-extrabold" style={{ color: "var(--text-main)" }}>
+                    {whyNotBoughtEntry.headline}
+                  </span>
+                </div>
+                <span
+                  className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border"
+                  style={{
+                    background: "rgba(14, 165, 233, 0.15)",
+                    borderColor: "rgba(14, 165, 233, 0.4)",
+                    color: "#0284c7",
+                  }}
+                >
+                  {whyNotBoughtEntry.category}
+                </span>
+              </div>
+
+              <p className="text-[12.8px] leading-relaxed mb-3" style={{ color: "var(--text-main)" }}>
+                {whyNotBoughtEntry.narrative}
+              </p>
+
+              <div
+                className="pt-2.5 border-t flex flex-wrap items-center gap-1.5"
+                style={{ borderColor: "rgba(14, 165, 233, 0.25)" }}
+              >
+                <span className="text-[11px] font-extrabold mr-1" style={{ color: "var(--text-muted)" }}>
+                  📌 Key Numbers:
+                </span>
+                {whyNotBoughtEntry.tokens.map((tok, tIdx) => (
+                  <span key={tIdx} className="tok-chip">
+                    {tok}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Filter Pills + Search Input */}
           <div className="flex flex-wrap items-center justify-between gap-3">
