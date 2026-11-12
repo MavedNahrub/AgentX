@@ -1,0 +1,69 @@
+{
+  "session_date": "2026-10-26",
+  "decision_timestamp_ist": "2026-10-26 09:30:00 IST (Minute 16 / 375)",
+  "prior_eod_cutoff_date": "2026-10-23 15:30:00 IST",
+  "intraday_window_exposed_at_decision": "2026-10-26 09:15:00 - 09:29:59 IST (First 15m Bar Only)",
+  "intraday_minutes_masked_at_decision": "Minutes 17..375 (09:30 AM - 03:30 PM Physically Stripped)",
+  "future_stock_day_rows_stripped": 500,
+  "future_rows_in_memory_count": 0,
+  "input_tensor_sha256": "536f91070af20106c4f9b1cedac8c4e5ee3ea4abc1914d442a7c8b0334c23a4e",
+  "purged_lightgbm_train_start": "2025-04-07",
+  "purged_lightgbm_train_cutoff": "2026-10-15",
+  "purged_embargo_gap_bars": 6,
+  "walk_forward_rank_ic": -0.131,
+  "morning_buys": [
+    {
+      "status": "FILLED_BUY",
+      "order_id": "ORD-20261026-BUY-JSWSTEEL-S1",
+      "gtt_id": "GTT-OCO-20261026-JSWSTEEL-S1",
+      "contract_note_no": "CN-20261026-NSE-0324",
+      "symbol": "JSWSTEEL",
+      "quantity": 16,
+      "fill_price": 1196.5,
+      "slippage_bps": 1.52,
+      "gross_notional_inr": 19144.0,
+      "total_tax_inr": 22.71,
+      "remaining_cash_inr": 80833.29
+    },
+    {
+      "status": "FILLED_BUY",
+      "order_id": "ORD-20261026-BUY-NESTLEIND-S2",
+      "gtt_id": "GTT-OCO-20261026-NESTLEIND-S2",
+      "contract_note_no": "CN-20261026-NSE-0325",
+      "symbol": "NESTLEIND",
+      "quantity": 20,
+      "fill_price": 1166.53,
+      "slippage_bps": 1.55,
+      "gross_notional_inr": 23330.6,
+      "total_tax_inr": 27.68,
+      "remaining_cash_inr": 57475.01
+    },
+    {
+      "status": "FILLED_BUY",
+      "order_id": "ORD-20261026-BUY-BPCL-S3",
+      "gtt_id": "GTT-OCO-20261026-BPCL-S3",
+      "contract_note_no": "CN-20261026-NSE-0326",
+      "symbol": "BPCL",
+      "quantity": 107,
+      "fill_price": 284.2,
+      "slippage_bps": 1.59,
+      "gross_notional_inr": 30409.4,
+      "total_tax_inr": 36.07,
+      "remaining_cash_inr": 27029.54
+    },
+    {
+      "status": "FILLED_BUY",
+      "order_id": "ORD-20261026-BUY-TATASTEEL-S4",
+      "gtt_id": "GTT-OCO-20261026-TATASTEEL-S4",
+      "contract_note_no": "CN-20261026-NSE-0327",
+      "symbol": "TATASTEEL",
+      "quantity": 161,
+      "fill_price": 166.82,
+      "slippage_bps": 1.57,
+      "gross_notional_inr": 26858.02,
+      "total_tax_inr": 31.86,
+      "remaining_cash_inr": 139.66
+    }
+  ],
+  "eviction_audit": []
+}

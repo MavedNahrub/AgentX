@@ -5,21 +5,40 @@ __pycache__/
 .venv/
 venv/
 env/
+*.egg-info/
+dist/
+build/
+
+# Node / Next.js
+node_modules/
+.next/
+web/.next/
+web/node_modules/
 
 # IDE & OS metadata
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Unverified runtime data caches (Stage 2 will verify & calibrate in live market conditions)
+# Runtime data caches (large binary files)
 data/cache/*.parquet
 data/cache/*.sqlite
 data/cache/*.json
 data/cache/*.md
-data/cache/pitch_charts/chart_equity_3tier.png
+data/cache/pitch_charts/
+data/paper_broker.db
 
-# Older intermediate pitch deck iterations (keep only final pitch deck)
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Older intermediate pitch deck iterations (keep only final decks)
 AgentX_PS02_Architecture_Pitch_Deck.pptx
 AgentX_PS02_Concise_Pitch_Deck.pptx
 AgentX_PS02_Formal_Pitch_Deck.pptx

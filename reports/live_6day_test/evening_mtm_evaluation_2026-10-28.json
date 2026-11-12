@@ -1,0 +1,123 @@
+{
+  "timestamp_utc": "2026-11-06T02:55:07.175860+00:00",
+  "session_type": "EVENING_MTM_EVALUATION",
+  "market_date": "2026-10-28",
+  "account_summary": {
+    "initial_capital_inr": 100000.0,
+    "cash_balance_inr": 284.46,
+    "open_positions_value_inr": 100425.6,
+    "total_equity_inr": 100710.06,
+    "total_return_pct": 0.71,
+    "realized_pnl_net_inr": 0.0,
+    "unrealized_pnl_gross_inr": 828.21,
+    "total_taxes_paid_inr": 118.15,
+    "peak_equity_inr": 100710.06,
+    "current_drawdown_pct": 0.0,
+    "open_slots_count": 4
+  },
+  "cumulative_churn_taxes_saved_inr": 1624.79,
+  "open_positions": [
+    {
+      "symbol": "APOLLOHOSP",
+      "sector": "PHARMA",
+      "slot_id": 1,
+      "entry_date": "2026-10-28",
+      "quantity": 3,
+      "entry_fill_price": 7800.21,
+      "entry_notional_inr": 23400.63,
+      "entry_tax_inr": 27.76,
+      "current_price": 8137.0,
+      "initial_stop_price": 7633.18,
+      "stop_loss_price": 7983.97,
+      "profit_target_price": 8372.75,
+      "assigned_strategy": "RANGE_REVERSION",
+      "expected_5d_alpha_pct": 2.51,
+      "conviction_pct": 96.0,
+      "bars_held": 1,
+      "market_value_inr": 24411.0,
+      "unrealized_gross_pnl_inr": 1010.37
+    },
+    {
+      "symbol": "LT",
+      "sector": "INFRA",
+      "slot_id": 2,
+      "entry_date": "2026-10-28",
+      "quantity": 10,
+      "entry_fill_price": 3829.53,
+      "entry_notional_inr": 38295.3,
+      "entry_tax_inr": 45.43,
+      "current_price": 3801.300048828125,
+      "initial_stop_price": 3761.11,
+      "stop_loss_price": 3761.11,
+      "profit_target_price": 4063.45,
+      "assigned_strategy": "RANGE_REVERSION",
+      "expected_5d_alpha_pct": 2.91,
+      "conviction_pct": 100.0,
+      "bars_held": 1,
+      "market_value_inr": 38013.0,
+      "unrealized_gross_pnl_inr": -282.3
+    },
+    {
+      "symbol": "BAJAJFINSV",
+      "sector": "FINANCIALS",
+      "slot_id": 3,
+      "entry_date": "2026-10-28",
+      "quantity": 11,
+      "entry_fill_price": 1659.18,
+      "entry_notional_inr": 18250.98,
+      "entry_tax_inr": 21.65,
+      "current_price": 1652.4000244140625,
+      "initial_stop_price": 1617.08,
+      "stop_loss_price": 1617.08,
+      "profit_target_price": 1790.77,
+      "assigned_strategy": "SMOOTH_TREND",
+      "expected_5d_alpha_pct": 0.93,
+      "conviction_pct": 94.0,
+      "bars_held": 1,
+      "market_value_inr": 18176.4,
+      "unrealized_gross_pnl_inr": -74.58
+    },
+    {
+      "symbol": "SHRIRAMFIN",
+      "sector": "FINANCIALS",
+      "slot_id": 4,
+      "entry_date": "2026-10-28",
+      "quantity": 24,
+      "entry_fill_price": 818.77,
+      "entry_notional_inr": 19650.48,
+      "entry_tax_inr": 23.31,
+      "current_price": 826.0499877929688,
+      "initial_stop_price": 785.39,
+      "stop_loss_price": 785.39,
+      "profit_target_price": 915.76,
+      "assigned_strategy": "DEFENSIVE_SHIELD",
+      "expected_5d_alpha_pct": 2.82,
+      "conviction_pct": 98.0,
+      "bars_held": 1,
+      "market_value_inr": 19825.2,
+      "unrealized_gross_pnl_inr": 174.72
+    }
+  ],
+  "telemetry": {
+    "cross_sectional_spread": {
+      "top4_symbols": [
+        "LT",
+        "SHRIRAMFIN",
+        "APOLLOHOSP",
+        "BAJAJFINSV"
+      ],
+      "top4_avg_intraday_ret_pct": 1.031,
+      "bottom4_symbols": [
+        "ICICIBANK",
+        "DRREDDY",
+        "M&M",
+        "AXISBANK"
+      ],
+      "bottom4_avg_intraday_ret_pct": 1.235,
+      "nifty50_equal_weight_ret_pct": 0.706,
+      "raw_spread_pct": -0.204,
+      "vol_normalized_spread_sigma": -0.421
+    },
+    "exits_triggered": []
+  }
+}

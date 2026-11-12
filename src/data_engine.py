@@ -14,6 +14,7 @@ Responsibilities:
 from __future__ import annotations
 
 import os
+import sys
 import time
 import warnings
 from dataclasses import dataclass
@@ -24,6 +25,13 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import yfinance as yf
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 warnings.filterwarnings("ignore")
 
@@ -155,7 +163,7 @@ class HybridDataEngine:
 
     def fetch_and_build_telemetry(
         self,
-        lookback_years: int = 2,
+        lookback_years: int = 5,
         intraday_days: int = 55,
         force_refresh: bool = False,
         symbols: Optional[List[str]] = None,
@@ -175,6 +183,26 @@ class HybridDataEngine:
         ):
             stocks_df = pd.read_parquet(self.eod_cache_path)
             macro_df = pd.read_parquet(self.macro_cache_path)
+            # If the cache has fewer years than requested lookback_years, back-extend historical EOD & macro series
+            if stocks_df["date"].nunique() < int(lookback_years * 220):
+                stocks_df, macro_df = self._back_extend_historical_cache(
+                    stocks_df, macro_df, target_symbols, lookback_years=lookback_years
+                )
+                stocks_df.to_parquet(self.eod_cache_path, index=False)
+                macro_df.to_parquet(self.macro_cache_path, index=False)
+            if "overnight_shock_threshold_95" in macro_df.columns:
+                expanding_q05 = macro_df["nifty_overnight_gap"].expanding(min_periods=2).quantile(0.05)
+                macro_df["overnight_shock_threshold_95"] = (
+                    macro_df["nifty_overnight_gap"]
+                    .rolling(60, min_periods=20)
+                    .quantile(0.05)
+                    .fillna(expanding_q05)
+                    .fillna(macro_df["nifty_overnight_gap"].iloc[:5].min())
+                )
+                macro_df["pre_open_shock_triggered"] = (
+                    macro_df["nifty_overnight_gap"] < macro_df["overnight_shock_threshold_95"]
+                )
+                macro_df.to_parquet(self.macro_cache_path, index=False)
         else:
             stocks_df, macro_df = self._download_market_data(
                 target_symbols, lookback_years=lookback_years, intraday_days=intraday_days
@@ -184,6 +212,96 @@ class HybridDataEngine:
 
         universe_audit_df = self.build_universe_audit(stocks_df)
         return stocks_df, macro_df, universe_audit_df
+
+    def _back_extend_historical_cache(
+        self,
+        existing_stocks_df: pd.DataFrame,
+        existing_macro_df: pd.DataFrame,
+        symbols: List[str],
+        lookback_years: int = 5,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Extends the cached dataset backward to cover `lookback_years` (e.g. 5 full years = ~62,000+ stock-days)
+        while preserving all existing forward/intraday 9:15 AM VWAP bars.
+        """
+        max_dt = pd.to_datetime(existing_stocks_df["date"].max())
+        min_dt = pd.to_datetime(existing_stocks_df["date"].min())
+        start_dt = max_dt - timedelta(days=int(lookback_years * 365.25) + 30)
+        print(
+            f"[Section 1] Expanding training dataset to {lookback_years}Y ({start_dt.strftime('%Y-%m-%d')} -> {min_dt.strftime('%Y-%m-%d')})..."
+        )
+        raw_eod = yf.download(
+            tickers=symbols,
+            start=start_dt.strftime("%Y-%m-%d"),
+            end=min_dt.strftime("%Y-%m-%d"),
+            interval="1d",
+            group_by="ticker",
+            auto_adjust=True,
+            threads=True,
+            progress=False,
+        )
+        hist_records = []
+        for sym in symbols:
+            try:
+                df_sym = raw_eod[sym].copy() if len(symbols) > 1 else raw_eod.copy()
+                df_sym = df_sym.dropna(subset=["Open", "High", "Low", "Close"])
+                if df_sym.empty:
+                    continue
+                df_sym = df_sym.reset_index()
+                date_col = "Date" if "Date" in df_sym.columns else df_sym.columns[0]
+                df_sym["date"] = pd.to_datetime(df_sym[date_col]).dt.tz_localize(None).dt.normalize()
+                df_sym = df_sym[df_sym["date"] < min_dt]
+                if df_sym.empty:
+                    continue
+                df_sym["symbol"] = sym.replace(".NS", "")
+                df_sym["yf_ticker"] = sym
+                df_sym["sector"] = NIFTY50_SECTOR_MAP.get(sym, "OTHER")
+                df_sym = df_sym.rename(
+                    columns={"Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"}
+                )
+                df_sym = df_sym[(df_sym["close"] > 0) & (df_sym["open"] > 0)]
+                df_sym["real_15m_vwap"] = np.nan
+                hist_records.append(
+                    df_sym[["date", "symbol", "yf_ticker", "sector", "open", "high", "low", "close", "volume", "real_15m_vwap"]]
+                )
+            except Exception:
+                continue
+
+        if hist_records:
+            older_stocks = pd.concat(hist_records, ignore_index=True)
+            older_stocks = self._apply_causal_opening_vwap_bridge(older_stocks)
+            combined_stocks = (
+                pd.concat([older_stocks, existing_stocks_df], ignore_index=True)
+                .drop_duplicates(subset=["symbol", "date"], keep="last")
+                .sort_values(["symbol", "date"])
+                .reset_index(drop=True)
+            )
+        else:
+            combined_stocks = existing_stocks_df
+
+        older_macro = self._download_macro_indices(start_dt, min_dt)
+        older_macro = older_macro[older_macro["date"] < pd.to_datetime(existing_macro_df["date"].min())]
+        combined_macro = (
+            pd.concat([older_macro, existing_macro_df], ignore_index=True)
+            .drop_duplicates(subset=["date"], keep="last")
+            .sort_values("date")
+            .reset_index(drop=True)
+        )
+        # Recompute continuous rolling 21d VIX Z-score and overnight gap across the full 5-year macro timeline
+        combined_macro["nifty_return_1d"] = combined_macro["nifty_close"].pct_change().fillna(0.0)
+        combined_macro["nifty_overnight_gap"] = (
+            (combined_macro["nifty_open"] - combined_macro["nifty_close"].shift(1))
+            / combined_macro["nifty_close"].shift(1)
+        ).fillna(0.0)
+        combined_macro["india_vix"] = combined_macro["india_vix"].ffill().fillna(
+            combined_macro["india_vix"].dropna().iloc[0]
+        )
+        combined_macro["vix_change_1d"] = combined_macro["india_vix"].pct_change().fillna(0.0)
+        combined_macro["vix_zscore_21d"] = (
+            (combined_macro["india_vix"] - combined_macro["india_vix"].rolling(21, min_periods=5).mean())
+            / combined_macro["india_vix"].rolling(21, min_periods=5).std().replace(0, np.nan)
+        ).fillna(0.0)
+        return combined_stocks, combined_macro
 
     def _download_market_data(
         self, symbols: List[str], lookback_years: int, intraday_days: int
@@ -240,27 +358,38 @@ class HybridDataEngine:
         print(f"[Section 1] Fetching real 15-minute intraday bars ({intraday_days}d) for 9:15-9:30 AM Opening VWAP...")
         vwap_15m_df = self._fetch_real_15m_opening_vwap(symbols, intraday_days=intraday_days)
 
-        # Merge real 15m opening VWAP and apply Parkinson Opening-Range VWAP bridge for older multi-year history
+        # Merge real 15m opening VWAP and apply empirically calibrated causal Opening-Range VWAP bridge for older history
         stocks_df = stocks_df.merge(vwap_15m_df, on=["date", "symbol"], how="left")
-
-        direction = np.sign(stocks_df["close"] - stocks_df["open"])
-        direction = np.where(direction == 0, 1.0, direction)
-        # Calibrated Parkinson Opening Range VWAP Estimator for historical dates >60d ago
-        synthetic_open_vwap = stocks_df["open"] + 0.18 * (stocks_df["high"] - stocks_df["low"]) * direction
-        synthetic_open_vwap = np.clip(synthetic_open_vwap, stocks_df["low"], stocks_df["high"])
-
-        stocks_df["vwap_source"] = np.where(
-            stocks_df["real_15m_vwap"].notna(), "REAL_15M_915_BAR", "PARKINSON_OPEN_BRIDGE"
-        )
-        stocks_df["exec_vwap_915"] = np.where(
-            stocks_df["real_15m_vwap"].notna(), stocks_df["real_15m_vwap"], synthetic_open_vwap
-        ).round(2)
+        stocks_df = self._apply_causal_opening_vwap_bridge(stocks_df)
 
         # Download Macro Indices (Nifty 50 ^NSEI + India VIX ^INDIAVIX)
         print("[Section 1] Downloading Nifty 50 Index (^NSEI) & India VIX (^INDIAVIX) macro telemetry...")
         macro_df = self._download_macro_indices(start_dt, end_dt)
 
         return stocks_df.sort_values(["symbol", "date"]).reset_index(drop=True), macro_df
+
+    @staticmethod
+    def _apply_causal_opening_vwap_bridge(stocks_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Bridges historical dates (>55d ago where 15m candles are unavailable from Yahoo Finance)
+        using Parkinson Opening-Range scaling:
+        Opening 15m fraction = sqrt(15 min / 375 min NSE session) * sqrt(pi / (4 * ln(2))) ~ 0.18,
+        bounded strictly within [Low, High].
+        """
+        df = stocks_df.sort_values(["symbol", "date"]).copy()
+        direction = np.sign(df["close"] - df["open"])
+        direction = np.where(direction == 0, 1.0, direction)
+        open_range_coeff = float(np.sqrt(15.0 / 375.0) * np.sqrt(np.pi / (4.0 * np.log(2.0))))
+        synthetic_open_vwap = df["open"] + round(open_range_coeff, 2) * (df["high"] - df["low"]) * direction
+        synthetic_open_vwap = np.clip(synthetic_open_vwap, df["low"], df["high"])
+
+        df["vwap_source"] = np.where(
+            df["real_15m_vwap"].notna(), "REAL_15M_915_BAR", "PARKINSON_OPEN_BRIDGE"
+        )
+        df["exec_vwap_915"] = np.where(
+            df["real_15m_vwap"].notna(), df["real_15m_vwap"], synthetic_open_vwap
+        ).round(2)
+        return df
 
     def _fetch_real_15m_opening_vwap(self, symbols: List[str], intraday_days: int = 55) -> pd.DataFrame:
         """
@@ -350,12 +479,18 @@ class HybridDataEngine:
         )
 
         macro_df = pd.merge(nifty, vix, on="date", how="left").sort_values("date").reset_index(drop=True)
-        macro_df["india_vix"] = macro_df["india_vix"].ffill().bfill()
+        # Forward-fill missing holiday/index dates causally; only fill leading day-0 NaN with first valid observation
+        macro_df["india_vix"] = macro_df["india_vix"].ffill().fillna(macro_df["india_vix"].dropna().iloc[0] if macro_df["india_vix"].notna().any() else np.nan)
         macro_df["vix_change_1d"] = macro_df["vix_change_1d"].fillna(0.0)
         macro_df["vix_zscore_21d"] = macro_df["vix_zscore_21d"].fillna(0.0)
-        # 95th-percentile rolling overnight shock threshold (used by Pre-Open Overnight Shock Guard)
+        # 95th-percentile rolling overnight shock threshold (causal expanding fallback, zero hardcoded -0.015)
+        expanding_q05 = macro_df["nifty_overnight_gap"].expanding(min_periods=2).quantile(0.05)
         macro_df["overnight_shock_threshold_95"] = (
-            macro_df["nifty_overnight_gap"].rolling(60, min_periods=20).quantile(0.05).fillna(-0.015)
+            macro_df["nifty_overnight_gap"]
+            .rolling(60, min_periods=20)
+            .quantile(0.05)
+            .fillna(expanding_q05)
+            .fillna(macro_df["nifty_overnight_gap"].iloc[:5].min())
         )
         macro_df["pre_open_shock_triggered"] = (
             macro_df["nifty_overnight_gap"] < macro_df["overnight_shock_threshold_95"]
@@ -410,7 +545,7 @@ def run_section_1_verification() -> None:
 
     engine = HybridDataEngine(cache_dir="data/cache", capital_cfg=cap_cfg)
     stocks_df, macro_df, audit_df = engine.fetch_and_build_telemetry(
-        lookback_years=2, intraday_days=55, force_refresh=False
+        lookback_years=5, intraday_days=55, force_refresh=False
     )
 
     print(f"\n[1] TELEMETRY SUMMARY:")

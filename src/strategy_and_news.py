@@ -58,6 +58,7 @@ class NewsCatalystAssessment(BaseModel):
         "REGULATORY_SEBI_RBI_PENALTY",
         "GOVERNANCE_OR_FRAUD_SHOCK",
         "LITIGATION_OR_PLANT_SHUTDOWN",
+        "SILENT_PRICE_VOLUME_CRASH_SHOCK",
     ]
     sentiment_score: float = Field(..., ge=-1.0, le=1.0)
     stock_tail_noise_pct: float = Field(
@@ -198,20 +199,21 @@ class EventDrivenStrategyTournament:
         er_rank = by_dt["efficiency_ratio_21d"].rank(pct=True)
         mom3_rank = by_dt["fib_mom_z_3d"].rank(pct=True)
         mom5_rank = by_dt["fib_mom_z_5d"].rank(pct=True)
+        mom8_rank = by_dt["fib_mom_z_8d"].rank(pct=True)
         mom13_rank = by_dt["fib_mom_z_13d"].rank(pct=True)
+        mom21_rank = by_dt["fib_mom_z_21d"].rank(pct=True)
         mom55_rank = by_dt["fib_mom_z_55d"].rank(pct=True)
         mrev_rank = by_dt["mean_rev_zscore_13d"].rank(pct=True)
         pvol_rank = by_dt["parkinson_vol_21d"].rank(pct=True)
         amihud_rank = by_dt["amihud_illiquidity_z"].rank(pct=True)
+        rel_str_rank = by_dt["rel_strength_vs_nifty_21d"].rank(pct=True)
 
         masks = {
-            "FAST_BREAKOUT": (mom13_rank >= 0.55) & (mom55_rank <= 0.30) & (pvol_rank >= 0.55),
-            "SMOOTH_TREND": (er_rank >= 0.65) & (mom3_rank <= 0.35) & (mom55_rank <= 0.50),
-            "RANGE_REVERSION": (mom55_rank <= 0.20) & (mrev_rank <= 0.25) & (pvol_rank >= 0.60),
+            "FAST_BREAKOUT": (mom5_rank >= 0.45) & (mom55_rank <= 0.55) & (pvol_rank >= 0.45),
+            "SMOOTH_TREND": (er_rank >= 0.50) & (mom55_rank <= 0.65),
+            "RANGE_REVERSION": (mrev_rank <= 0.30) & (rel_str_rank <= 0.45),
             "DEFENSIVE_SHIELD": (amihud_rank <= 0.45)
-            & (er_rank >= 0.55)
-            & (mom55_rank <= 0.40)
-            & (mom5_rank <= 0.40),
+            & (er_rank >= 0.50),
         }
 
         universe_size = float(hist["symbol"].nunique())
@@ -226,12 +228,12 @@ class EventDrivenStrategyTournament:
             downside_ratios = realized_over_tail[realized_over_tail < 0].abs()
             upside_ratios = realized_over_tail[realized_over_tail > 0]
 
-            q_lo = float(downside_ratios.quantile(0.25)) if len(downside_ratios) >= 5 else 0.50
-            q_hi = float(downside_ratios.quantile(0.85)) if len(downside_ratios) >= 5 else 1.25
-            learned_stop_mult = float(downside_ratios.quantile(0.60)) if len(downside_ratios) >= 5 else 0.75
+            q_lo = float(downside_ratios.quantile(0.45)) if len(downside_ratios) >= 5 else 0.75
+            q_hi = float(downside_ratios.quantile(0.90)) if len(downside_ratios) >= 5 else 1.45
+            learned_stop_mult = float(downside_ratios.quantile(0.75)) if len(downside_ratios) >= 5 else 1.00
             learned_stop_mult = float(np.clip(learned_stop_mult, q_lo, q_hi))
 
-            learned_upside_mult = float(upside_ratios.quantile(0.96)) if len(upside_ratios) >= 5 else 2.20
+            learned_upside_mult = float(upside_ratios.quantile(0.96)) if len(upside_ratios) >= 5 else 2.50
             learned_target_mult = float(learned_upside_mult / max(1e-4, learned_stop_mult))
 
             stop_pct = (sub["empirical_tail_stop_pct"] * learned_stop_mult).values
@@ -241,9 +243,11 @@ class EventDrivenStrategyTournament:
 
             # Scale-invariant friction per signal: Statutory Tax (at current CapitalConfig) + Order-Size Amihud Impact
             slot_notional_inr = self.capital_cfg.ideal_slot_size_inr
-            adv_inr = (sub["close"] * sub["volume"]).replace(0, np.nan).bfill().values
+            raw_adv = (sub["close"] * sub["volume"]).replace(0, np.nan)
+            adv_inr = raw_adv.ffill().fillna(float(raw_adv.median())).values
             part_rate = np.clip(slot_notional_inr / adv_inr, 1e-7, 0.25)
-            impact_pct = 2.0 * sub["parkinson_vol_21d"].bfill().values * np.sqrt(part_rate) * 100.0
+            pvol_vals = sub["parkinson_vol_21d"].ffill().fillna(float(sub["parkinson_vol_21d"].median())).values
+            impact_pct = 2.0 * pvol_vals * np.sqrt(part_rate) * 100.0
             dynamic_friction_pct = self.capital_cfg.dynamic_round_trip_tax_pct + impact_pct
 
             bounded_gross_pct = np.clip(raw_ret_pct, -stop_pct * 100.0, target_pct * 100.0)
@@ -318,9 +322,9 @@ class EventDrivenStrategyTournament:
         df = ranked_df.copy()
         # Cross-sectional percentile ranks on today's 50 stocks (zero magic thresholds!)
         er_pct = df["efficiency_ratio_21d"].rank(pct=True)
-        mom3_pct = df["fib_mom_z_3d"].rank(pct=True)
-        mom13_pct = df["fib_mom_z_13d"].rank(pct=True)
+        mom5_pct = df["fib_mom_z_5d"].rank(pct=True)
         mom55_pct = df["fib_mom_z_55d"].rank(pct=True)
+        rel_str_pct = df["rel_strength_vs_nifty_21d"].rank(pct=True)
         pvol_pct = df["parkinson_vol_21d"].rank(pct=True)
         mrev_pct = df["mean_rev_zscore_13d"].rank(pct=True)
 
@@ -330,24 +334,24 @@ class EventDrivenStrategyTournament:
             if row["micro_regime"] in approved_set:
                 chosen = str(row["micro_regime"])
             elif (
-                "RANGE_REVERSION" in approved_set
-                and mom55_pct.loc[idx] <= 0.30
-                and mrev_pct.loc[idx] <= 0.35
-            ):
-                chosen = "RANGE_REVERSION"
-            elif (
                 "FAST_BREAKOUT" in approved_set
-                and mom13_pct.loc[idx] >= 0.55
-                and mom55_pct.loc[idx] <= 0.40
-                and pvol_pct.loc[idx] >= 0.50
+                and mom5_pct.loc[idx] >= 0.45
+                and mom55_pct.loc[idx] <= 0.55
+                and pvol_pct.loc[idx] >= 0.45
             ):
                 chosen = "FAST_BREAKOUT"
             elif (
                 "SMOOTH_TREND" in approved_set
-                and er_pct.loc[idx] >= 0.60
-                and mom3_pct.loc[idx] <= 0.45
+                and er_pct.loc[idx] >= 0.50
+                and mom55_pct.loc[idx] <= 0.65
             ):
                 chosen = "SMOOTH_TREND"
+            elif (
+                "RANGE_REVERSION" in approved_set
+                and mrev_pct.loc[idx] <= 0.35
+                and rel_str_pct.loc[idx] <= 0.45
+            ):
+                chosen = "RANGE_REVERSION"
             else:
                 chosen = top_approved_strat
 
@@ -460,14 +464,37 @@ class DateBoundedNewsVetoEngine:
         self,
         symbol: str,
         as_of_date: pd.Timestamp,
-        stock_empirical_tail_stop_pct: float = 0.035,
+        stock_empirical_tail_stop_pct: float,
         recent_3d_return_pct: float = 0.0,
+        recent_1d_return_pct: float = 0.0,
+        volume_shock_ratio: float = 1.0,
         custom_headlines: Optional[List[str]] = None,
     ) -> NewsCatalystAssessment:
         date_str = as_of_date.strftime("%Y-%m-%d")
-        cache_key = f"{symbol}_{date_str}_v2"
+        cache_key = f"{symbol}_{date_str}_v3"
         if custom_headlines is None and cache_key in self._cache:
-            return NewsCatalystAssessment(**self._cache[cache_key])
+            cached_obj = dict(self._cache[cache_key])
+            # Re-evaluate price-action shock & priced-in logic dynamically on live telemetry
+            tail_noise_pct = round(float(stock_empirical_tail_stop_pct) * 100.0, 2)
+            three_day_tail_bound = round(tail_noise_pct * np.sqrt(3.0 / 2.5), 2)
+            severe_neg = bool(cached_obj.get("has_severe_negative_catalyst", False))
+            if not severe_neg and (recent_1d_return_pct <= -tail_noise_pct) and (volume_shock_ratio >= 1.75):
+                severe_neg = True
+                cached_obj["has_severe_negative_catalyst"] = True
+                cached_obj["catalyst_type"] = "SILENT_PRICE_VOLUME_CRASH_SHOCK"
+                cached_obj["sentiment_score"] = -0.80
+                cached_obj["one_line_evidence"] = (
+                    f"Unindexed institutional price-volume shock: 1d drop {recent_1d_return_pct:+.2f}% breached tail bound -{tail_noise_pct:.2f}% on {volume_shock_ratio:.2f}x RVOL"
+                )
+            already_priced_in = bool(
+                severe_neg
+                and (recent_3d_return_pct <= -three_day_tail_bound)
+                and (recent_1d_return_pct > -0.5 * tail_noise_pct)
+            )
+            cached_obj["stock_tail_noise_pct"] = tail_noise_pct
+            cached_obj["is_already_priced_in"] = already_priced_in
+            cached_obj["veto_trade"] = bool(severe_neg and not already_priced_in)
+            return NewsCatalystAssessment(**cached_obj)
 
         headlines = (
             custom_headlines
@@ -509,9 +536,24 @@ class DateBoundedNewsVetoEngine:
                 detected_cat = "NEUTRAL_CORP_UPDATE"
                 score = 0.10
 
-        # Self-calibrating "already priced in" check: compare recent 3d drop against 1.25x the stock's own empirical tail noise!
-        tail_noise_pct = round(stock_empirical_tail_stop_pct * 100.0, 2)
-        already_priced_in = bool(severe_neg and (recent_3d_return_pct <= -1.25 * tail_noise_pct))
+        tail_noise_pct = round(float(stock_empirical_tail_stop_pct) * 100.0, 2)
+        three_day_tail_bound = round(tail_noise_pct * np.sqrt(3.0 / 2.5), 2)
+
+        # Fallback Silent Price-Volume Crash Detector (protects when RSS fails/lags during an unindexed flash crash)
+        if not severe_neg and (recent_1d_return_pct <= -tail_noise_pct) and (volume_shock_ratio >= 1.75):
+            severe_neg = True
+            detected_cat = "SILENT_PRICE_VOLUME_CRASH_SHOCK"
+            score = -0.80
+            evidence = (
+                f"Unindexed institutional price-volume shock: 1d drop {recent_1d_return_pct:+.2f}% breached tail bound -{tail_noise_pct:.2f}% on {volume_shock_ratio:.2f}x RVOL"
+            )
+
+        # Self-calibrating "already priced in" check: 3d drop exceeded 3d tail bound AND today's 1d selling has stabilized
+        already_priced_in = bool(
+            severe_neg
+            and (recent_3d_return_pct <= -three_day_tail_bound)
+            and (recent_1d_return_pct > -0.5 * tail_noise_pct)
+        )
         veto = bool(severe_neg and not already_priced_in)
 
         assessment = NewsCatalystAssessment(
@@ -591,8 +633,16 @@ def run_section_4_verification() -> None:
     for _, row in paired_df.head(4).iterrows():
         sym = row["symbol"]
         tail_stop = float(row["empirical_tail_stop_pct"])
+        ret_3d_pct = float(row["fib_mom_z_3d"] * row["ret_std_21d"] * np.sqrt(3.0) * 100.0)
+        ret_1d_pct = float(row.get("ret_1d", 0.0) * 100.0)
+        rvol = float(row.get("volume_shock_21d", 1.0))
         assessment = news_engine.evaluate_catalyst_veto(
-            sym, as_of_date=latest_date, stock_empirical_tail_stop_pct=tail_stop
+            sym,
+            as_of_date=latest_date,
+            stock_empirical_tail_stop_pct=tail_stop,
+            recent_3d_return_pct=ret_3d_pct,
+            recent_1d_return_pct=ret_1d_pct,
+            volume_shock_ratio=rvol,
         )
         print(
             f"  • {sym:<10} | Veto={str(assessment.veto_trade):<5} | TailNoise={assessment.stock_tail_noise_pct:.2f}% | Type={assessment.catalyst_type:<26} | Headlines={assessment.headlines_analyzed}"

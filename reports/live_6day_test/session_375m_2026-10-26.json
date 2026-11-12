@@ -1,0 +1,247 @@
+{
+  "session_date": "2026-10-26",
+  "status": "COMPLETED_375M_SESSION",
+  "current_minute": 375,
+  "total_minutes": 375,
+  "current_clock_ist": "2026-10-26 15:29:00 IST (375/375 Mins Complete)",
+  "portfolio_equity_inr": 102202.8,
+  "portfolio_return_pct": 2.2,
+  "cash_balance_inr": 139.66,
+  "account_summary": {
+    "initial_capital_inr": 100000.0,
+    "cash_balance_inr": 139.66,
+    "open_positions_value_inr": 102063.14,
+    "total_equity_inr": 102202.8,
+    "total_return_pct": 2.2,
+    "realized_pnl_net_inr": 0.0,
+    "unrealized_pnl_gross_inr": 2321.12,
+    "total_taxes_paid_inr": 118.32,
+    "peak_equity_inr": 102202.8,
+    "current_drawdown_pct": 0.0,
+    "open_slots_count": 4
+  },
+  "open_positions": [
+    {
+      "symbol": "JSWSTEEL",
+      "sector": "METALS",
+      "slot_id": 1,
+      "entry_date": "2026-10-26",
+      "quantity": 16,
+      "entry_fill_price": 1196.5,
+      "entry_notional_inr": 19144.0,
+      "entry_tax_inr": 22.71,
+      "current_price": 1260.0,
+      "initial_stop_price": 1148.71,
+      "stop_loss_price": 1223.17,
+      "profit_target_price": 1305.34,
+      "assigned_strategy": "FAST_BREAKOUT",
+      "expected_5d_alpha_pct": 1.4,
+      "conviction_pct": 96.0,
+      "bars_held": 1,
+      "market_value_inr": 20160.0,
+      "unrealized_gross_pnl_inr": 1016.0
+    },
+    {
+      "symbol": "NESTLEIND",
+      "sector": "FMCG",
+      "slot_id": 2,
+      "entry_date": "2026-10-26",
+      "quantity": 20,
+      "entry_fill_price": 1166.53,
+      "entry_notional_inr": 23330.6,
+      "entry_tax_inr": 27.68,
+      "current_price": 1173.5,
+      "initial_stop_price": 1122.71,
+      "stop_loss_price": 1122.71,
+      "profit_target_price": 1266.3,
+      "assigned_strategy": "FAST_BREAKOUT",
+      "expected_5d_alpha_pct": 1.53,
+      "conviction_pct": 98.0,
+      "bars_held": 1,
+      "market_value_inr": 23470.0,
+      "unrealized_gross_pnl_inr": 139.4
+    },
+    {
+      "symbol": "BPCL",
+      "sector": "ENERGY",
+      "slot_id": 3,
+      "entry_date": "2026-10-26",
+      "quantity": 107,
+      "entry_fill_price": 284.2,
+      "entry_notional_inr": 30409.4,
+      "entry_tax_inr": 36.07,
+      "current_price": 290.4,
+      "initial_stop_price": 275.47,
+      "stop_loss_price": 281.78,
+      "profit_target_price": 304.03,
+      "assigned_strategy": "FAST_BREAKOUT",
+      "expected_5d_alpha_pct": 1.65,
+      "conviction_pct": 100.0,
+      "bars_held": 1,
+      "market_value_inr": 31072.8,
+      "unrealized_gross_pnl_inr": 663.4
+    },
+    {
+      "symbol": "TATASTEEL",
+      "sector": "METALS",
+      "slot_id": 4,
+      "entry_date": "2026-10-26",
+      "quantity": 161,
+      "entry_fill_price": 166.82,
+      "entry_notional_inr": 26858.02,
+      "entry_tax_inr": 31.86,
+      "current_price": 169.94,
+      "initial_stop_price": 162.03,
+      "stop_loss_price": 165.2,
+      "profit_target_price": 177.69,
+      "assigned_strategy": "FAST_BREAKOUT",
+      "expected_5d_alpha_pct": 1.34,
+      "conviction_pct": 94.0,
+      "bars_held": 1,
+      "market_value_inr": 27360.34,
+      "unrealized_gross_pnl_inr": 502.32
+    }
+  ],
+  "intraday_events": [
+    {
+      "minute_num": 1,
+      "timestamp_ist": "2026-10-26 09:15:00",
+      "event_type": "SESSION_OPEN_915",
+      "symbol": "NSE_MARKET",
+      "details": "NSE 375-Minute Session Opened (2026-10-26 09:15:00 IST). 15m Opening VWAP Discovery Active."
+    },
+    {
+      "minute_num": 16,
+      "timestamp_ist": "2026-10-26 09:30:00",
+      "event_type": "MORNING_PORTFOLIO_LOCKED",
+      "symbol": "PORTFOLIO",
+      "details": "09:30 AM Causal Orders Locked: ['JSWSTEEL', 'NESTLEIND', 'BPCL', 'TATASTEEL'] | Initial Cash: \u20b9139.66"
+    },
+    {
+      "minute_num": 269,
+      "timestamp_ist": "2026-10-26 13:43:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "JSWSTEEL",
+      "details": "Min 269/375 (13:43 IST): [JSWSTEEL] New Session Peak \u20b91,227.90 (+2.62% | Target Prog 29%) -> Stop Ratcheted \u20b91,148.71 -> \u20b91,180.28"
+    },
+    {
+      "minute_num": 289,
+      "timestamp_ist": "2026-10-26 14:03:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "JSWSTEEL",
+      "details": "Min 289/375 (14:03 IST): [JSWSTEEL] New Session Peak \u20b91,232.00 (+2.97% | Target Prog 33%) -> Stop Ratcheted \u20b91,180.28 -> \u20b91,184.62"
+    },
+    {
+      "minute_num": 299,
+      "timestamp_ist": "2026-10-26 14:13:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "JSWSTEEL",
+      "details": "Min 299/375 (14:13 IST): [JSWSTEEL] New Session Peak \u20b91,235.10 (+3.23% | Target Prog 35%) -> Stop Ratcheted \u20b91,184.62 -> \u20b91,187.94"
+    },
+    {
+      "minute_num": 314,
+      "timestamp_ist": "2026-10-26 14:28:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "JSWSTEEL",
+      "details": "Min 314/375 (14:28 IST): [JSWSTEEL] New Session Peak \u20b91,237.20 (+3.40% | Target Prog 37%) -> Stop Ratcheted \u20b91,187.94 -> \u20b91,190.20"
+    },
+    {
+      "minute_num": 324,
+      "timestamp_ist": "2026-10-26 14:38:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "JSWSTEEL",
+      "details": "Min 324/375 (14:38 IST): [JSWSTEEL] New Session Peak \u20b91,239.20 (+3.57% | Target Prog 39%) -> Stop Ratcheted \u20b91,190.20 -> \u20b91,215.89"
+    },
+    {
+      "minute_num": 371,
+      "timestamp_ist": "2026-10-26 15:25:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "JSWSTEEL",
+      "details": "Min 371/375 (15:25 IST): [JSWSTEEL] New Session Peak \u20b91,260.00 (+5.31% | Target Prog 58%) -> Stop Ratcheted \u20b91,215.89 -> \u20b91,223.17"
+    },
+    {
+      "minute_num": 371,
+      "timestamp_ist": "2026-10-26 15:25:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "BPCL",
+      "details": "Min 371/375 (15:25 IST): [BPCL] New Session Peak \u20b9290.40 (+2.18% | Target Prog 31%) -> Stop Ratcheted \u20b9275.47 -> \u20b9281.78"
+    },
+    {
+      "minute_num": 371,
+      "timestamp_ist": "2026-10-26 15:25:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "TATASTEEL",
+      "details": "Min 371/375 (15:25 IST): [TATASTEEL] New Session Peak \u20b9169.94 (+1.87% | Target Prog 29%) -> Stop Ratcheted \u20b9162.03 -> \u20b9165.20"
+    }
+  ],
+  "intraday_exits_executed": [],
+  "causal_proof": {
+    "session_date": "2026-10-26",
+    "decision_timestamp_ist": "2026-10-26 09:30:00 IST (Minute 16 / 375)",
+    "prior_eod_cutoff_date": "2026-10-23 15:30:00 IST",
+    "intraday_window_exposed_at_decision": "2026-10-26 09:15:00 - 09:29:59 IST (First 15m Bar Only)",
+    "intraday_minutes_masked_at_decision": "Minutes 17..375 (09:30 AM - 03:30 PM Physically Stripped)",
+    "future_stock_day_rows_stripped": 500,
+    "future_rows_in_memory_count": 0,
+    "input_tensor_sha256": "536f91070af20106c4f9b1cedac8c4e5ee3ea4abc1914d442a7c8b0334c23a4e",
+    "purged_lightgbm_train_start": "2025-04-07",
+    "purged_lightgbm_train_cutoff": "2026-10-15",
+    "purged_embargo_gap_bars": 6,
+    "walk_forward_rank_ic": -0.131,
+    "morning_buys": [
+      {
+        "status": "FILLED_BUY",
+        "order_id": "ORD-20261026-BUY-JSWSTEEL-S1",
+        "gtt_id": "GTT-OCO-20261026-JSWSTEEL-S1",
+        "contract_note_no": "CN-20261026-NSE-0324",
+        "symbol": "JSWSTEEL",
+        "quantity": 16,
+        "fill_price": 1196.5,
+        "slippage_bps": 1.52,
+        "gross_notional_inr": 19144.0,
+        "total_tax_inr": 22.71,
+        "remaining_cash_inr": 80833.29
+      },
+      {
+        "status": "FILLED_BUY",
+        "order_id": "ORD-20261026-BUY-NESTLEIND-S2",
+        "gtt_id": "GTT-OCO-20261026-NESTLEIND-S2",
+        "contract_note_no": "CN-20261026-NSE-0325",
+        "symbol": "NESTLEIND",
+        "quantity": 20,
+        "fill_price": 1166.53,
+        "slippage_bps": 1.55,
+        "gross_notional_inr": 23330.6,
+        "total_tax_inr": 27.68,
+        "remaining_cash_inr": 57475.01
+      },
+      {
+        "status": "FILLED_BUY",
+        "order_id": "ORD-20261026-BUY-BPCL-S3",
+        "gtt_id": "GTT-OCO-20261026-BPCL-S3",
+        "contract_note_no": "CN-20261026-NSE-0326",
+        "symbol": "BPCL",
+        "quantity": 107,
+        "fill_price": 284.2,
+        "slippage_bps": 1.59,
+        "gross_notional_inr": 30409.4,
+        "total_tax_inr": 36.07,
+        "remaining_cash_inr": 27029.54
+      },
+      {
+        "status": "FILLED_BUY",
+        "order_id": "ORD-20261026-BUY-TATASTEEL-S4",
+        "gtt_id": "GTT-OCO-20261026-TATASTEEL-S4",
+        "contract_note_no": "CN-20261026-NSE-0327",
+        "symbol": "TATASTEEL",
+        "quantity": 161,
+        "fill_price": 166.82,
+        "slippage_bps": 1.57,
+        "gross_notional_inr": 26858.02,
+        "total_tax_inr": 31.86,
+        "remaining_cash_inr": 139.66
+      }
+    ],
+    "eviction_audit": []
+  }
+}

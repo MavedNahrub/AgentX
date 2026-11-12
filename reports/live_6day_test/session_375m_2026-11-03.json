@@ -1,0 +1,339 @@
+{
+  "session_date": "2026-11-03",
+  "status": "COMPLETED_375M_SESSION",
+  "current_minute": 375,
+  "total_minutes": 375,
+  "current_clock_ist": "2026-11-03 15:29:00 IST (375/375 Mins Complete)",
+  "portfolio_equity_inr": 109209.85,
+  "portfolio_return_pct": 9.21,
+  "cash_balance_inr": 533.85,
+  "account_summary": {
+    "initial_capital_inr": 100000.0,
+    "cash_balance_inr": 533.85,
+    "open_positions_value_inr": 108676.0,
+    "total_equity_inr": 109209.85,
+    "total_return_pct": 9.21,
+    "realized_pnl_net_inr": 7193.43,
+    "unrealized_pnl_gross_inr": 2142.79,
+    "total_taxes_paid_inr": 810.84,
+    "peak_equity_inr": 109209.85,
+    "current_drawdown_pct": 0.0,
+    "open_slots_count": 4
+  },
+  "open_positions": [
+    {
+      "symbol": "ASIANPAINT",
+      "sector": "CONSUMER",
+      "slot_id": 1,
+      "entry_date": "2026-11-03",
+      "quantity": 14,
+      "entry_fill_price": 2426.89,
+      "entry_notional_inr": 33976.46,
+      "entry_tax_inr": 40.3,
+      "current_price": 2437.800048828125,
+      "initial_stop_price": 2339.82,
+      "stop_loss_price": 2339.82,
+      "profit_target_price": 2624.98,
+      "assigned_strategy": "FAST_BREAKOUT",
+      "expected_5d_alpha_pct": 1.16,
+      "conviction_pct": 96.0,
+      "bars_held": 1,
+      "market_value_inr": 34129.2,
+      "unrealized_gross_pnl_inr": 152.74
+    },
+    {
+      "symbol": "BAJFINANCE",
+      "sector": "FINANCIALS",
+      "slot_id": 2,
+      "entry_date": "2026-10-30",
+      "quantity": 24,
+      "entry_fill_price": 935.69,
+      "entry_notional_inr": 22456.56,
+      "entry_tax_inr": 26.64,
+      "current_price": 970.0,
+      "initial_stop_price": 897.88,
+      "stop_loss_price": 954.03,
+      "profit_target_price": 1019.94,
+      "assigned_strategy": "RANGE_REVERSION",
+      "expected_5d_alpha_pct": 0.76,
+      "conviction_pct": 100.0,
+      "bars_held": 3,
+      "market_value_inr": 23280.0,
+      "unrealized_gross_pnl_inr": 823.44
+    },
+    {
+      "symbol": "NESTLEIND",
+      "sector": "FMCG",
+      "slot_id": 3,
+      "entry_date": "2026-11-03",
+      "quantity": 17,
+      "entry_fill_price": 1210.79,
+      "entry_notional_inr": 20583.43,
+      "entry_tax_inr": 24.42,
+      "current_price": 1248.4000244140625,
+      "initial_stop_price": 1165.3,
+      "stop_loss_price": 1203.66,
+      "profit_target_price": 1314.34,
+      "assigned_strategy": "FAST_BREAKOUT",
+      "expected_5d_alpha_pct": 2.31,
+      "conviction_pct": 100.0,
+      "bars_held": 1,
+      "market_value_inr": 21222.8,
+      "unrealized_gross_pnl_inr": 639.37
+    },
+    {
+      "symbol": "TATACONSUM",
+      "sector": "FMCG",
+      "slot_id": 4,
+      "entry_date": "2026-11-03",
+      "quantity": 28,
+      "entry_fill_price": 1054.17,
+      "entry_notional_inr": 29516.76,
+      "entry_tax_inr": 35.01,
+      "current_price": 1073.0,
+      "initial_stop_price": 1025.75,
+      "stop_loss_price": 1044.93,
+      "profit_target_price": 1118.7,
+      "assigned_strategy": "FAST_BREAKOUT",
+      "expected_5d_alpha_pct": 1.31,
+      "conviction_pct": 98.0,
+      "bars_held": 1,
+      "market_value_inr": 30044.0,
+      "unrealized_gross_pnl_inr": 527.24
+    }
+  ],
+  "intraday_events": [
+    {
+      "minute_num": 1,
+      "timestamp_ist": "2026-11-03 09:15:00",
+      "event_type": "SESSION_OPEN_915",
+      "symbol": "NSE_MARKET",
+      "details": "NSE 375-Minute Session Opened (2026-11-03 09:15:00 IST). 15m Opening VWAP Discovery Active."
+    },
+    {
+      "minute_num": 16,
+      "timestamp_ist": "2026-11-03 09:30:00",
+      "event_type": "MORNING_PORTFOLIO_LOCKED",
+      "symbol": "PORTFOLIO",
+      "details": "09:30 AM Causal Orders Locked: ['BPCL', 'BAJFINANCE', 'NESTLEIND', 'NTPC'] | Initial Cash: \u20b9610.43"
+    },
+    {
+      "minute_num": 17,
+      "timestamp_ist": "2026-11-03 09:31:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "BPCL",
+      "details": "Min 17/375 (09:31 IST): [BPCL] New Session Peak \u20b9298.35 (+2.94% | Target Prog 33%) -> Stop Ratcheted \u20b9278.58 -> \u20b9287.22"
+    },
+    {
+      "minute_num": 17,
+      "timestamp_ist": "2026-11-03 09:31:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "BAJFINANCE",
+      "details": "Min 17/375 (09:31 IST): [BAJFINANCE] New Session Peak \u20b9973.55 (+4.05% | Target Prog 45%) -> Stop Ratcheted \u20b9897.88 -> \u20b9952.42"
+    },
+    {
+      "minute_num": 29,
+      "timestamp_ist": "2026-11-03 09:43:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "BPCL",
+      "details": "Min 29/375 (09:43 IST): [BPCL] New Session Peak \u20b9299.20 (+3.23% | Target Prog 37%) -> Stop Ratcheted \u20b9287.22 -> \u20b9288.13"
+    },
+    {
+      "minute_num": 33,
+      "timestamp_ist": "2026-11-03 09:47:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "BPCL",
+      "details": "Min 33/375 (09:47 IST): [BPCL] New Session Peak \u20b9299.70 (+3.41% | Target Prog 39%) -> Stop Ratcheted \u20b9288.13 -> \u20b9288.67"
+    },
+    {
+      "minute_num": 33,
+      "timestamp_ist": "2026-11-03 09:47:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "BAJFINANCE",
+      "details": "Min 33/375 (09:47 IST): [BAJFINANCE] New Session Peak \u20b9978.15 (+4.54% | Target Prog 50%) -> Stop Ratcheted \u20b9952.42 -> \u20b9954.03"
+    },
+    {
+      "minute_num": 36,
+      "timestamp_ist": "2026-11-03 09:50:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "BPCL",
+      "details": "Min 36/375 (09:50 IST): [BPCL] New Session Peak \u20b9300.35 (+3.63% | Target Prog 41%) -> Stop Ratcheted \u20b9288.67 -> \u20b9294.59"
+    },
+    {
+      "minute_num": 103,
+      "timestamp_ist": "2026-11-03 10:57:00",
+      "event_type": "\ud83d\uded1 INTRADAY_STOP_LOSS_EXIT",
+      "symbol": "NTPC",
+      "details": "Min 103/375 (10:57 IST): Low \u20b9320.20 breached Stop \u20b9320.25 -> SOLD 93 sh @ \u20b9320.15 (Net PnL: \u20b9+677.68)"
+    },
+    {
+      "minute_num": 103,
+      "timestamp_ist": "2026-11-03 10:57:00",
+      "event_type": "\u26a1 INTRADAY_SLOT_REDEPLOY_BUY",
+      "symbol": "TATACONSUM",
+      "details": "Min 103/375 (10:57 IST): Redeployed Freed Cash into Slot #4 [TATACONSUM] (FAST_BREAKOUT): 28 sh @ \u20b91,054.17 | Stop: \u20b91,025.75 | Target: \u20b91,118.70"
+    },
+    {
+      "minute_num": 176,
+      "timestamp_ist": "2026-11-03 12:10:00",
+      "event_type": "\ud83d\uded1 INTRADAY_STOP_LOSS_EXIT",
+      "symbol": "BPCL",
+      "details": "Min 176/375 (12:10 IST): Low \u20b9294.10 breached Stop \u20b9294.59 -> SOLD 115 sh @ \u20b9294.05 (Net PnL: \u20b9+394.79)"
+    },
+    {
+      "minute_num": 176,
+      "timestamp_ist": "2026-11-03 12:10:00",
+      "event_type": "\u26a1 INTRADAY_SLOT_REDEPLOY_BUY",
+      "symbol": "ASIANPAINT",
+      "details": "Min 176/375 (12:10 IST): Redeployed Freed Cash into Slot #1 [ASIANPAINT] (FAST_BREAKOUT): 14 sh @ \u20b92,426.89 | Stop: \u20b92,339.82 | Target: \u20b92,624.98"
+    },
+    {
+      "minute_num": 360,
+      "timestamp_ist": "2026-11-03 15:14:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "NESTLEIND",
+      "details": "Min 360/375 (15:14 IST): [NESTLEIND] New Session Peak \u20b91,240.50 (+2.45% | Target Prog 29%) -> Stop Ratcheted \u20b91,165.30 -> \u20b91,195.24"
+    },
+    {
+      "minute_num": 375,
+      "timestamp_ist": "2026-11-03 15:29:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "NESTLEIND",
+      "details": "Min 375/375 (15:29 IST): [NESTLEIND] New Session Peak \u20b91,248.40 (+3.11% | Target Prog 36%) -> Stop Ratcheted \u20b91,195.24 -> \u20b91,203.66"
+    },
+    {
+      "minute_num": 375,
+      "timestamp_ist": "2026-11-03 15:29:00",
+      "event_type": "\ud83d\udd12 CHANDELIER_STOP_RATCHET",
+      "symbol": "TATACONSUM",
+      "details": "Min 375/375 (15:29 IST): [TATACONSUM] New Session Peak \u20b91,073.00 (+1.79% | Target Prog 29%) -> Stop Ratcheted \u20b91,025.75 -> \u20b91,044.93"
+    }
+  ],
+  "intraday_exits_executed": [
+    {
+      "minute_num": 103,
+      "timestamp_ist": "2026-11-03 10:57:00",
+      "event_type": "\ud83d\uded1 INTRADAY_STOP_LOSS_EXIT",
+      "symbol": "NTPC",
+      "details": "Min 103/375 (10:57 IST): Low \u20b9320.20 breached Stop \u20b9320.25 -> SOLD 93 sh @ \u20b9320.15 (Net PnL: \u20b9+677.68)"
+    },
+    {
+      "minute_num": 176,
+      "timestamp_ist": "2026-11-03 12:10:00",
+      "event_type": "\ud83d\uded1 INTRADAY_STOP_LOSS_EXIT",
+      "symbol": "BPCL",
+      "details": "Min 176/375 (12:10 IST): Low \u20b9294.10 breached Stop \u20b9294.59 -> SOLD 115 sh @ \u20b9294.05 (Net PnL: \u20b9+394.79)"
+    }
+  ],
+  "causal_proof": {
+    "session_date": "2026-11-03",
+    "decision_timestamp_ist": "2026-11-03 09:30:00 IST (Minute 16 / 375)",
+    "prior_eod_cutoff_date": "2026-11-02 15:30:00 IST",
+    "intraday_window_exposed_at_decision": "2026-11-03 09:15:00 - 09:29:59 IST (First 15m Bar Only)",
+    "intraday_minutes_masked_at_decision": "Minutes 17..375 (09:30 AM - 03:30 PM Physically Stripped)",
+    "future_stock_day_rows_stripped": 200,
+    "future_rows_in_memory_count": 0,
+    "input_tensor_sha256": "3543b439b9f4df9882f2cc2c7da2d44f8e7e49a3929806746cb4cb5bdb3f70d8",
+    "purged_lightgbm_train_start": "2025-04-17",
+    "purged_lightgbm_train_cutoff": "2026-10-26",
+    "purged_embargo_gap_bars": 6,
+    "walk_forward_rank_ic": 0.0451,
+    "morning_buys": [
+      {
+        "status": "FILLED_BUY",
+        "order_id": "ORD-20261103-BUY-NESTLEIND-S3",
+        "gtt_id": "GTT-OCO-20261103-NESTLEIND-S3",
+        "contract_note_no": "CN-20261103-NSE-0341",
+        "symbol": "NESTLEIND",
+        "quantity": 17,
+        "fill_price": 1210.79,
+        "slippage_bps": 1.53,
+        "gross_notional_inr": 20583.43,
+        "total_tax_inr": 24.42,
+        "remaining_cash_inr": 610.43
+      }
+    ],
+    "eviction_audit": [
+      {
+        "holding_symbol": "BPCL",
+        "holding_sector": "ENERGY",
+        "bars_held": 1,
+        "unrealized_return_pct": 2.857,
+        "smoothed_rank_pct": 0.51,
+        "holding_notional_inr": 34282.65,
+        "holding_alpha_pct": 0.34,
+        "challenger_symbol": "NESTLEIND",
+        "challenger_alpha_pct": 2.31,
+        "alpha_gain_pct": 1.97,
+        "switch_tax_inr": 92.12,
+        "switch_tax_pct": 0.269,
+        "switch_tax_cost_pct": 0.269,
+        "alpha_se_pct": 0.122,
+        "required_hurdle_pct": 0.391,
+        "loss_recovery_hurdle_pct": 0.782,
+        "churn_tax_saved_inr": 92.12,
+        "eviction_verdict": "BLOCK_ROTATION (Swing Patience Lock: Held 1/3d, Profit +2.86%, Forward Rank 54th Pctl)"
+      },
+      {
+        "holding_symbol": "BAJFINANCE",
+        "holding_sector": "FINANCIALS",
+        "bars_held": 2,
+        "unrealized_return_pct": 3.592,
+        "smoothed_rank_pct": 0.68,
+        "holding_notional_inr": 23263.2,
+        "holding_alpha_pct": 0.65,
+        "challenger_symbol": "TATACONSUM",
+        "challenger_alpha_pct": 1.31,
+        "alpha_gain_pct": 0.66,
+        "switch_tax_inr": 67.64,
+        "switch_tax_pct": 0.291,
+        "switch_tax_cost_pct": 0.291,
+        "alpha_se_pct": 0.122,
+        "required_hurdle_pct": 0.413,
+        "loss_recovery_hurdle_pct": 0.826,
+        "churn_tax_saved_inr": 67.64,
+        "eviction_verdict": "BLOCK_ROTATION (Swing Patience Lock: Held 2/3d, Profit +3.59%, Forward Rank 64th Pctl)"
+      },
+      {
+        "holding_symbol": "SHRIRAMFIN",
+        "holding_sector": "FINANCIALS",
+        "bars_held": 4,
+        "unrealized_return_pct": 8.095,
+        "smoothed_rank_pct": 0.66,
+        "holding_notional_inr": 21241.2,
+        "holding_alpha_pct": 0.5,
+        "challenger_symbol": "NESTLEIND",
+        "challenger_alpha_pct": 2.31,
+        "alpha_gain_pct": 1.81,
+        "switch_tax_inr": 63.14,
+        "switch_tax_pct": 0.297,
+        "switch_tax_cost_pct": 0.297,
+        "alpha_se_pct": 0.122,
+        "required_hurdle_pct": 0.419,
+        "loss_recovery_hurdle_pct": 0.838,
+        "churn_tax_saved_inr": 0.0,
+        "eviction_verdict": "APPROVE_SWITCH (Priority-A Mature Profit Harvest: Booked +8.10% -> Upgrade to NESTLEIND +2.31%)"
+      },
+      {
+        "holding_symbol": "NTPC",
+        "holding_sector": "ENERGY",
+        "bars_held": 2,
+        "unrealized_return_pct": 2.827,
+        "smoothed_rank_pct": 0.92,
+        "holding_notional_inr": 29835.33,
+        "holding_alpha_pct": 0.69,
+        "challenger_symbol": "TATACONSUM",
+        "challenger_alpha_pct": 1.31,
+        "alpha_gain_pct": 0.63,
+        "switch_tax_inr": 82.24,
+        "switch_tax_pct": 0.276,
+        "switch_tax_cost_pct": 0.276,
+        "alpha_se_pct": 0.122,
+        "required_hurdle_pct": 0.398,
+        "loss_recovery_hurdle_pct": 0.796,
+        "churn_tax_saved_inr": 82.24,
+        "eviction_verdict": "BLOCK_ROTATION (Swing Patience Lock: Held 2/3d, Profit +2.83%, Forward Rank 68th Pctl)"
+      }
+    ]
+  }
+}

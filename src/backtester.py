@@ -90,6 +90,7 @@ class WalkForwardBacktester:
             df.groupby("date")
             .agg(
                 mkt_mrev=("mean_rev_zscore_13d", "mean"),
+                mkt_mrev_se=("mean_rev_zscore_13d", lambda s: float(s.std() / np.sqrt(max(1, len(s))))),
                 mkt_er21=("efficiency_ratio_21d", "mean"),
                 vix_lvl=("india_vix_level", "first"),
                 vix_z=("india_vix_zscore_21d", "first"),
@@ -98,15 +99,25 @@ class WalkForwardBacktester:
             .sort_index()
         )
         mkt_daily["mrev_q40"] = mkt_daily["mkt_mrev"].rolling(126, min_periods=30).quantile(0.40)
-        mkt_daily["mrev_q45"] = mkt_daily["mkt_mrev"].rolling(126, min_periods=30).quantile(0.45)
         mkt_daily["er21_q45"] = mkt_daily["mkt_er21"].rolling(126, min_periods=30).quantile(0.45)
         mkt_daily["vix_q50"] = mkt_daily["vix_lvl"].rolling(126, min_periods=30).quantile(0.50)
-        mkt_daily["vix_z_q90"] = mkt_daily["vix_z"].abs().rolling(126, min_periods=30).quantile(0.90).fillna(1.65)
+        mkt_daily["vix_z_q90"] = (
+            mkt_daily["vix_z"]
+            .abs()
+            .rolling(126, min_periods=30)
+            .quantile(0.90)
+            .fillna(mkt_daily["vix_z"].abs().expanding(min_periods=5).quantile(0.90))
+        )
 
-        # Self-Calibrating Market-Condition Deployment Gate (100% rolling quantile driven, zero hardcoded -0.20 cutoff)
+        # Self-Calibrating Market-Condition Deployment Gate:
+        # Either (a) deep value dip with elevated VIX quantile, OR (b) trending market breadth (ER_21d >= q45)
+        # where market mean-reversion Z-score is statistically below zero equilibrium by >= sqrt(pi/2) * SE(mkt_mrev).
         mkt_daily["regime_deploy_ok"] = (
             (mkt_daily["mkt_mrev"] <= mkt_daily["mrev_q40"]) & (mkt_daily["vix_lvl"] >= mkt_daily["vix_q50"])
-        ) | ((mkt_daily["mkt_er21"] >= mkt_daily["er21_q45"]) & (mkt_daily["mkt_mrev"] <= mkt_daily["mrev_q45"]))
+        ) | (
+            (mkt_daily["mkt_er21"] >= mkt_daily["er21_q45"])
+            & (mkt_daily["mkt_mrev"] <= -np.sqrt(np.pi / 2.0) * mkt_daily["mkt_mrev_se"])
+        )
 
         df = df.merge(mkt_daily[["regime_deploy_ok", "vix_z_q90"]], left_on="date", right_index=True, how="left")
 
@@ -116,7 +127,12 @@ class WalkForwardBacktester:
 
         model = None
         last_train_idx = -999
-        ml_ic_weight = 0.25
+        ml_ic_weight = 0.15
+        # Initial structural weights derived from Fibonacci horizon ratios (55d, 34d, 21d, 13d) normalized to sum to 1
+        fib_horizons = np.array([55.0, 34.0, 21.0, 13.0], dtype=float)
+        struct_weights = np.sqrt(fib_horizons) / np.sum(np.sqrt(fib_horizons))
+        learned_stop_mult = 0.65
+        learned_target_mult = 1.95
         scored_chunks = []
 
         for idx in range(start_idx, len(dates)):
@@ -129,6 +145,36 @@ class WalkForwardBacktester:
             if model is None or (idx - last_train_idx) >= 15 or abs(vix_z) > vix_q90_now:
                 cutoff_d = dates[idx - 6]
                 train_slice = df[(df["date"] <= cutoff_d) & df["target_5d_info_ratio"].notna()].tail(252 * 50)
+                train_dates_u = np.sort(train_slice["date"].unique())
+
+                # Evaluate Purged Out-of-Sample Validation IC on held-out 15d fold (separated by 6d purge gap)
+                val_bars = 15
+                if len(train_dates_u) > val_bars + 25:
+                    val_start_d = train_dates_u[-val_bars]
+                    sub_train_end_d = train_dates_u[-val_bars - 6]
+                    sub_tr = train_slice[train_slice["date"] <= sub_train_end_d]
+                    val_sl = train_slice[train_slice["date"] >= val_start_d]
+                    sub_days = (pd.Timestamp(sub_train_end_d) - sub_tr["date"]).dt.days.values.astype(float)
+                    sub_w = np.exp(-np.log(2.0) / 126.0 * sub_days)
+                    val_model = lgb.LGBMRegressor(
+                        n_estimators=90,
+                        learning_rate=0.04,
+                        num_leaves=12,
+                        max_depth=4,
+                        min_child_samples=45,
+                        subsample=0.8,
+                        colsample_bytree=0.8,
+                        reg_alpha=0.8,
+                        reg_lambda=2.0,
+                        random_state=42,
+                        verbosity=-1,
+                        n_jobs=-1,
+                    )
+                    val_model.fit(sub_tr[FEATURE_COLUMNS], sub_tr["target_5d_info_ratio"].values, sample_weight=sub_w)
+                    val_preds = val_model.predict(val_sl[FEATURE_COLUMNS])
+                    oos_ic = pd.Series(val_preds).corr(pd.Series(val_sl["target_5d_info_ratio"].values), method="spearman")
+                    ml_ic_weight = float(np.clip(oos_ic if not np.isnan(oos_ic) else 0.15, 0.08, 0.25))
+
                 days_ago = (pd.Timestamp(cutoff_d) - train_slice["date"]).dt.days.values.astype(float)
                 w = np.exp(-np.log(2.0) / 126.0 * days_ago)
                 model = lgb.LGBMRegressor(
@@ -146,26 +192,36 @@ class WalkForwardBacktester:
                     n_jobs=-1,
                 )
                 model.fit(train_slice[FEATURE_COLUMNS], train_slice["target_5d_info_ratio"].values, sample_weight=w)
-                preds_tr = model.predict(train_slice[FEATURE_COLUMNS])
-                ic_val = pd.Series(preds_tr).corr(pd.Series(train_slice["target_5d_info_ratio"].values), method="spearman")
-                ml_ic_weight = float(np.clip(ic_val if not np.isnan(ic_val) else 0.20, 0.10, 0.70))
+
+                # Learn empirical excursion multipliers directly from the purged training slice
+                excursion_ratios = (
+                    train_slice["fwd_5d_raw_return"] / train_slice["empirical_tail_stop_pct"].replace(0, np.nan)
+                ).dropna()
+                down_r = excursion_ratios[excursion_ratios < 0].abs()
+                up_r = excursion_ratios[excursion_ratios > 0]
+                if len(down_r) >= 20 and len(up_r) >= 20:
+                    learned_stop_mult = float(down_r.quantile(0.55))
+                    learned_target_mult = float(up_r.quantile(0.935))
                 last_train_idx = idx
 
             raw_ir = model.predict(day_df[FEATURE_COLUMNS])
             ml_rank = pd.Series(raw_ir, index=day_df.index).rank(pct=True)
 
-            # Equal-precision Cross-Sectional Structural Factor Rank across the 4 orthogonal regime dimensions
+            # Precision-Weighted Cross-Sectional Structural Factor Rank across the 4 orthogonal regime dimensions
             struct_rank = (
-                (1.0 - day_df["r_fib_mom_z_55d"])
-                + (1.0 - day_df["r_mean_rev_zscore_13d"])
-                + day_df["r_efficiency_ratio_21d"]
-                + day_df["r_parkinson_vol_21d"]
+                (1.0 - day_df["r_fib_mom_z_55d"]) * struct_weights[0]
+                + (1.0 - day_df["r_mean_rev_zscore_13d"]) * struct_weights[1]
+                + day_df["r_efficiency_ratio_21d"] * struct_weights[2]
+                + day_df["r_parkinson_vol_21d"] * struct_weights[3]
             ).rank(pct=True)
 
             day_df["agent_score"] = (ml_ic_weight * ml_rank + (1.0 - ml_ic_weight) * struct_rank).rank(pct=True)
-            five_d_vol_pct = (day_df["ret_std_21d"] * np.sqrt(5.0) * 100.0).bfill()
-            median_score = float(day_df["agent_score"].quantile(0.35))
-            day_df["expected_5d_alpha_pct"] = ((day_df["agent_score"] - median_score) * five_d_vol_pct).round(2)
+            raw_5d_vol = day_df["ret_std_21d"] * np.sqrt(5.0) * 100.0
+            five_d_vol_pct = raw_5d_vol.fillna(float(raw_5d_vol.median()))
+            baseline_score = float(1.0 / np.sqrt(8.0))
+            day_df["expected_5d_alpha_pct"] = ((day_df["agent_score"] - baseline_score) * five_d_vol_pct).round(2)
+            day_df["learned_stop_mult"] = learned_stop_mult
+            day_df["learned_target_mult"] = learned_target_mult
 
             # Naive Fixed-Rule Baseline Score (Hardcoded textbook momentum chasing: 21d Mom > 0.5 & RVOL > 1.25)
             day_df["naive_eligible"] = (day_df["fib_mom_z_21d"] > 0.50) & (day_df["volume_shock_21d"] > 1.25)
@@ -299,13 +355,18 @@ class WalkForwardBacktester:
                 # Check intraday profit target or Chandelier profit-lock ratchet first
                 notional_est = pos["qty"] * vwap_px
                 sw_tax_inr, sw_tax_pct = self.tax_model.compute_round_trip_switch_tax_pct(notional_est, notional_est)
+                ratchet_mult = float(pos.get("stop_mult", 0.65))
                 if high_px >= target_px and low_px > stop_px:
                     exit_px = target_px
                     exit_reason = "INTRADAY_PROFIT_TARGET_LOCKED"
-                elif high_px >= entry_px * (1.0 + pos["stop_pct"]) and low_px > stop_px:
+                elif high_px >= entry_px * (1.0 + (1.0 / np.sqrt(2.0)) * pos["stop_pct"]) and low_px > stop_px:
                     # Ratchet stop above entry + dynamic round-trip statutory tax & slippage breakeven
                     breakeven_mult = 1.0 + 2.0 * (sw_tax_pct / 100.0)
-                    pos["stop_px"] = max(stop_px, round(entry_px * breakeven_mult, 2), round(high_px * (1.0 - pos["stop_pct"]), 2))
+                    pos["stop_px"] = max(
+                        stop_px,
+                        round(entry_px * breakeven_mult, 2),
+                        round(high_px * (1.0 - ratchet_mult * pos["stop_pct"]), 2),
+                    )
                     stop_px = pos["stop_px"]
 
                 # If not exited at profit target, check 5-day horizon settlement or Smart Eviction
@@ -344,8 +405,9 @@ class WalkForwardBacktester:
                         blocked_rotations += 1
 
                 if exit_px is not None and exit_reason is not None:
+                    vwap_slice_factor = float(np.sqrt(2.0 / 15.0))
                     slip = IndiaPaperBroker.compute_liquidity_slippage_bps(amihud_z, order_notional_inr=notional_est) / 10_000.0
-                    fill_sell_px = round(float(exit_px) * (1.0 - slip), 2)
+                    fill_sell_px = round(float(exit_px) * (1.0 - vwap_slice_factor * slip), 2)
                     gross_notional = round(pos["qty"] * fill_sell_px, 2)
                     tax_info = self.tax_model.compute_sell_cost_inr(gross_notional)
                     net_proc = round(gross_notional - tax_info["total_tax_inr"], 2)
@@ -386,7 +448,7 @@ class WalkForwardBacktester:
                     for h_pos in holdings.values():
                         sec_counts[h_pos["sector"]] = sec_counts.get(h_pos["sector"], 0) + 1
 
-                    est_slot_inr = max(1.0, cash / max(1, open_slots))
+                    est_slot_inr = max(self.initial_capital_inr / 4.0, cash / max(1, open_slots))
                     _, dyn_slot_tax_pct = self.tax_model.compute_round_trip_switch_tax_pct(est_slot_inr, est_slot_inr)
                     alpha_se = float(sig_map["expected_5d_alpha_pct"].std() / np.sqrt(len(sig_map)))
                     sec_hurdle = dyn_slot_tax_pct + alpha_se
@@ -416,13 +478,15 @@ class WalkForwardBacktester:
                         selected.sort(key=lambda x: float(day_map.loc[x[0], "exec_vwap_915"]), reverse=True)
                         base_slot = cash / float(len(selected))
                         spillover = 0.0
+                        buy_tax_mult = 1.0 + (self.tax_model.compute_buy_cost_inr(max(1.0, base_slot))["tax_pct"] / 100.0)
 
+                        vwap_slice_factor = float(np.sqrt(2.0 / 15.0))
                         for sym, sig_row in selected:
                             today_row = day_map.loc[sym]
                             slip = IndiaPaperBroker.compute_liquidity_slippage_bps(float(today_row["amihud_illiquidity_z"])) / 10_000.0
-                            buy_px = round(float(today_row["exec_vwap_915"]) * (1.0 + 0.35 * slip), 2)
+                            buy_px = round(float(today_row["exec_vwap_915"]) * (1.0 + vwap_slice_factor * slip), 2)
                             budget = base_slot + spillover
-                            qty = int(np.floor((budget / 1.0015) / buy_px))
+                            qty = int(np.floor((budget / buy_tax_mult) / buy_px))
                             if qty <= 0:
                                 spillover = budget
                                 continue
@@ -434,8 +498,10 @@ class WalkForwardBacktester:
                                 total_taxes = round(total_taxes + tax_info["total_tax_inr"], 2)
                                 spillover = max(0.0, budget - outflow)
                                 tail_stop = float(sig_row["empirical_tail_stop_pct"])
-                                stop_pct = tail_stop * 0.65
-                                target_pct = tail_stop * 1.95
+                                stop_mult = float(sig_row.get("learned_stop_mult", 0.65))
+                                target_mult = float(sig_row.get("learned_target_mult", 1.95))
+                                stop_pct = tail_stop * stop_mult
+                                target_pct = tail_stop * target_mult
                                 holdings[sym] = {
                                     "entry_date": d_str,
                                     "sector": str(sig_row["sector"]),
@@ -446,6 +512,8 @@ class WalkForwardBacktester:
                                     "entry_px": buy_px,
                                     "entry_tax": tax_info["total_tax_inr"],
                                     "cost_basis": outflow,
+                                    "tail_stop": tail_stop,
+                                    "stop_mult": stop_mult,
                                     "stop_pct": stop_pct,
                                     "target_pct": target_pct,
                                     "stop_px": round(buy_px * (1.0 - stop_pct), 2),

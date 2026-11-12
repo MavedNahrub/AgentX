@@ -655,8 +655,7 @@ class ZeroHallucinationTradeJournal:
         as_of_date = pd.Timestamp(ranked_df["date"].iloc[0])
         as_of_str = as_of_date.strftime("%Y-%m-%d")
 
-        alpha_std_err = float(ranked_df["expected_5d_alpha_pct"].std() / np.sqrt(len(ranked_df)))
-        dynamic_hurdle_pct = round(0.29 + alpha_std_err, 2)
+        dynamic_hurdle_pct = round(float(ranked_df["dynamic_alpha_hurdle_pct"].iloc[0]), 2)
 
         tournament = EventDrivenStrategyTournament()
         tourn_df = tournament.run_post_tax_tournament(feat_df, as_of_date=as_of_date)
@@ -671,6 +670,8 @@ class ZeroHallucinationTradeJournal:
                 as_of_date=as_of_date,
                 stock_empirical_tail_stop_pct=float(r["empirical_tail_stop_pct"]),
                 recent_3d_return_pct=ret_3d_pct,
+                recent_1d_return_pct=float(r.get("ret_1d", 0.0) * 100.0),
+                volume_shock_ratio=float(r.get("volume_shock_21d", 1.0)),
             )
 
         vault = CryptographicRiskVault(capital_cfg=CapitalConfig(initial_capital_inr=100_000.0))
@@ -700,46 +701,9 @@ class ZeroHallucinationTradeJournal:
         ]
 
         challenger = paired_df.iloc[0]
-        mock_holdings = [
-            {
-                "symbol": "BAJAJFINSV",
-                "sector": "FINANCIALS",
-                "bars_held": 2,
-                "quantity_shares": 15,
-                "current_price": 1658.93,
-                "stop_loss_price": 1616.43,
-                "current_expected_5d_alpha_pct": 1.07,
-            },
-            {
-                "symbol": "NESTLEIND",
-                "sector": "FMCG",
-                "bars_held": 4,
-                "quantity_shares": 21,
-                "current_price": 1162.48,
-                "stop_loss_price": 1138.00,
-                "current_expected_5d_alpha_pct": 2.18,
-            },
-            {
-                "symbol": "AXISBANK",
-                "sector": "FINANCIALS",
-                "bars_held": 5,
-                "quantity_shares": 20,
-                "current_price": 1205.58,
-                "stop_loss_price": 1175.00,
-                "current_expected_5d_alpha_pct": -0.42,
-            },
-            {
-                "symbol": "KOTAKBANK",
-                "sector": "FINANCIALS",
-                "bars_held": 1,
-                "quantity_shares": 55,
-                "current_price": 421.00,
-                "stop_loss_price": 428.00,
-                "current_expected_5d_alpha_pct": -0.42,
-            },
-        ]
+        real_prior_holdings = vault.build_historical_held_positions(feat_df, paired_df)
         eviction_df = vault.evaluate_smart_eviction(
-            current_holdings=mock_holdings,
+            current_holdings=real_prior_holdings,
             challenger_row=challenger,
             cross_section_df=paired_df,
             news_assessments=news_map,
