@@ -38,10 +38,14 @@ data/paper_broker.db
 # Logs
 *.log
 
-# Older intermediate pitch deck iterations (keep only final decks)
-AgentX_PS02_Architecture_Pitch_Deck.pptx
-AgentX_PS02_Concise_Pitch_Deck.pptx
-AgentX_PS02_Formal_Pitch_Deck.pptx
-AgentX_PS02_Idea_Pitch_Deck.pptx
-AgentX_PS02_Pitch_Deck.pptx
-AgentX_PS02_Winning_Pitch_Deck.pptx
+# All pitch decks in root (final deck lives in reports/ only)
+/*.pptx
+
+# Old/intermediate pitch decks everywhere
+AgentX_PS02_*.pptx
+AgentX_Final_*.pptx
+AgentX_Keynote_*.pptx
+
+# Misc generated artifacts
+script.pdf
+*.pdf
