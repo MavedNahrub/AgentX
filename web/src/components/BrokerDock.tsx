@@ -1156,7 +1156,7 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
               className="rounded-xl p-3 px-4 border text-[12.5px] flex flex-wrap items-center justify-between gap-2.5 transition-all"
               style={{
                 background: "var(--surface-subtle)",
-                borderColor: "rgba(14, 165, 233, 0.4)",
+                borderColor: "var(--card-border-strong)",
               }}
             >
               <div className="flex items-center gap-2">
@@ -1231,18 +1231,18 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
             <div
               className="rounded-xl p-4 border"
               style={{
-                background: "rgba(14, 165, 233, 0.08)",
-                borderColor: "rgba(14, 165, 233, 0.55)",
+                background: "var(--card-bg)",
+                borderColor: "var(--card-border-strong)",
               }}
             >
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2">
                   <span
-                    className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md tracking-wider"
+                    className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md tracking-wider border"
                     style={{
-                      background: "rgba(14, 165, 233, 0.25)",
-                      color: "#0284c7",
-                      border: "1px solid rgba(14, 165, 233, 0.4)",
+                      background: "var(--surface-subtle)",
+                      color: "var(--text-main)",
+                      borderColor: "var(--card-border-strong)",
                     }}
                   >
                     ⭐ Daily Portfolio Audit
@@ -1254,22 +1254,22 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
                 <span
                   className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border"
                   style={{
-                    background: "rgba(14, 165, 233, 0.15)",
-                    borderColor: "rgba(14, 165, 233, 0.4)",
-                    color: "#0284c7",
+                    background: "var(--surface-subtle)",
+                    borderColor: "var(--card-border-strong)",
+                    color: "var(--text-muted)",
                   }}
                 >
                   {whyNotBoughtEntry.category}
                 </span>
               </div>
 
-              <p className="text-[12.8px] leading-relaxed mb-3" style={{ color: "var(--text-main)" }}>
+              <p className="text-[12.8px] leading-relaxed mb-3" style={{ color: "var(--text-muted)" }}>
                 {whyNotBoughtEntry.narrative}
               </p>
 
               <div
                 className="pt-2.5 border-t flex flex-wrap items-center gap-1.5"
-                style={{ borderColor: "rgba(14, 165, 233, 0.25)" }}
+                style={{ borderColor: "var(--card-border-strong)" }}
               >
                 <span className="text-[11px] font-extrabold mr-1" style={{ color: "var(--text-muted)" }}>
                   📌 Key Numbers:
@@ -1333,22 +1333,22 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
                   key={`${j.symbol}-${idx}`}
                   className="rounded-xl p-4 border transition-all"
                   style={{
-                    background: isSpecialWhyCard ? "rgba(14, 165, 233, 0.06)" : "var(--card-bg)",
-                    borderColor: isSpecialWhyCard ? "rgba(14, 165, 233, 0.55)" : "var(--card-border-strong)",
+                    background: "var(--card-bg)",
+                    borderColor: "var(--card-border-strong)",
                   }}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                     <div className="text-[14px] font-extrabold flex items-center gap-2">
                       {isSpecialWhyCard && (
                         <span
-                          className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md tracking-wider"
+                          className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md tracking-wider border"
                           style={{
-                            background: "rgba(14, 165, 233, 0.2)",
-                            color: "#0284c7",
-                            border: "1px solid rgba(14, 165, 233, 0.4)",
+                            background: "var(--surface-subtle)",
+                            color: "var(--text-main)",
+                            borderColor: "var(--card-border-strong)",
                           }}
                         >
-                          ⭐ Top Daily Audit
+                          ⭐ Daily Audit
                         </span>
                       )}
                       <span>{j.headline}</span>
@@ -1356,9 +1356,9 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
                     <span
                       className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border"
                       style={{
-                        background: isSpecialWhyCard ? "rgba(14, 165, 233, 0.15)" : "var(--surface-subtle)",
-                        borderColor: isSpecialWhyCard ? "rgba(14, 165, 233, 0.4)" : "var(--card-border-strong)",
-                        color: isSpecialWhyCard ? "#0284c7" : "var(--text-main)",
+                        background: "var(--surface-subtle)",
+                        borderColor: "var(--card-border-strong)",
+                        color: "var(--text-muted)",
                       }}
                     >
                       {j.category}
