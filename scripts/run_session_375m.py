@@ -664,6 +664,8 @@ def run_stage_morning(
     paired_df["raw_1d_rank_pct"] = (1.0 - (paired_df["alpha_rank"] - 1) / len(paired_df)).round(4)
     paired_df["conviction_pct"] = (paired_df["raw_1d_rank_pct"] * 100.0).round(2)
     paired_df.to_parquet("data/cache/alpha_scout_latest_ranked.parquet", index=False)
+    if "sector_df" in locals() and not sector_df.empty:
+        sector_df.to_parquet("data/cache/alpha_scout_latest_sector.parquet", index=False)
 
     news_engine = DateBoundedNewsVetoEngine(cache_dir="data/cache")
     news_map = {}

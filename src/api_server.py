@@ -94,6 +94,8 @@ def _compute_pipeline_sig() -> tuple[float, ...]:
         _file_mtime(cache_dir / "nifty50_eod.parquet"),
         _file_mtime(cache_dir / "walk_forward_backtest_summary.parquet"),
         _file_mtime(cache_dir / "trade_journal_entries.parquet"),
+        _file_mtime(cache_dir / "alpha_scout_latest_ranked.parquet"),
+        _file_mtime(cache_dir / "alpha_scout_latest_sector.parquet"),
     )
 
 
@@ -124,14 +126,29 @@ def get_pipeline_artifacts(force: bool = False) -> dict[str, Any]:
     feat_engine = ChameleonFeatureEngine(cache_dir="data/cache")
     feat_df = feat_engine.build_features(stocks_df, macro_df, save_cache=False)
 
-    scout = WalkForwardAlphaScout()
-    ranked_df, sector_df, wf_meta = scout.score_cross_section_with_shap(feat_df, retrain=True)
-    as_of_date = pd.Timestamp(ranked_df["date"].iloc[0])
-    as_of_str = as_of_date.strftime("%Y-%m-%d")
+    latest_ranked_path = cache_dir / "alpha_scout_latest_ranked.parquet"
+    latest_sector_path = cache_dir / "alpha_scout_latest_sector.parquet"
 
-    tournament = EventDrivenStrategyTournament()
-    board_df = tournament.run_post_tax_tournament(feat_df, as_of_date=as_of_date)
-    paired_df = tournament.assign_strategy_and_exit_geometry(ranked_df, board_df)
+    if latest_ranked_path.exists():
+        paired_df = pd.read_parquet(latest_ranked_path)
+        as_of_date = pd.Timestamp(paired_df["date"].iloc[0])
+        as_of_str = as_of_date.strftime("%Y-%m-%d")
+        if latest_sector_path.exists():
+            sector_df = pd.read_parquet(latest_sector_path)
+        else:
+            scout = WalkForwardAlphaScout()
+            _, sector_df, _ = scout.score_cross_section_with_shap(feat_df, retrain=False)
+        wf_meta = {"as_of_date": as_of_str, "source": "alpha_scout_latest_ranked"}
+        board_df = pd.DataFrame()
+    else:
+        scout = WalkForwardAlphaScout()
+        ranked_df, sector_df, wf_meta = scout.score_cross_section_with_shap(feat_df, retrain=True)
+        as_of_date = pd.Timestamp(ranked_df["date"].iloc[0])
+        as_of_str = as_of_date.strftime("%Y-%m-%d")
+
+        tournament = EventDrivenStrategyTournament()
+        board_df = tournament.run_post_tax_tournament(feat_df, as_of_date=as_of_date)
+        paired_df = tournament.assign_strategy_and_exit_geometry(ranked_df, board_df)
 
     news_engine = DateBoundedNewsVetoEngine()
     news_map = {}
