@@ -629,33 +629,54 @@ class IndiaPaperBroker:
                     """,
                     (new_cash, new_taxes, now_utc),
                 )
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO open_positions (
-                        symbol, sector, slot_id, entry_date, quantity, entry_fill_price,
-                        entry_notional_inr, entry_tax_inr, current_price, initial_stop_price,
-                        stop_loss_price, profit_target_price, assigned_strategy,
-                        expected_5d_alpha_pct, conviction_pct, bars_held
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                    """,
-                    (
-                        packet.symbol,
-                        packet.sector,
-                        packet.slot_id,
-                        packet.as_of_date,
-                        qty,
-                        fill_px,
-                        gross_notional,
-                        tax_info["total_tax_inr"],
-                        fill_px,
-                        packet.stop_loss_price,
-                        packet.stop_loss_price,
-                        packet.profit_target_price,
-                        packet.assigned_strategy,
-                        packet.expected_5d_alpha_pct,
-                        packet.conviction_pct,
-                    ),
-                )
+                cur_pos = conn.execute(
+                    "SELECT quantity, entry_fill_price, entry_notional_inr, entry_tax_inr, bars_held FROM open_positions WHERE symbol = ?",
+                    (packet.symbol,),
+                ).fetchone()
+
+                if cur_pos:
+                    old_q, old_fill_px, old_notional, old_tax, old_bars = cur_pos
+                    comb_q = int(old_q) + int(qty)
+                    comb_notional = round(float(old_notional) + gross_notional, 2)
+                    comb_fill_px = round(comb_notional / max(1, comb_q), 2)
+                    comb_tax = round(float(old_tax) + tax_info["total_tax_inr"], 2)
+                    conn.execute(
+                        """
+                        UPDATE open_positions
+                        SET quantity = ?, entry_fill_price = ?, entry_notional_inr = ?,
+                            entry_tax_inr = ?, current_price = ?
+                        WHERE symbol = ?
+                        """,
+                        (comb_q, comb_fill_px, comb_notional, comb_tax, fill_px, packet.symbol),
+                    )
+                else:
+                    conn.execute(
+                        """
+                        INSERT INTO open_positions (
+                            symbol, sector, slot_id, entry_date, quantity, entry_fill_price,
+                            entry_notional_inr, entry_tax_inr, current_price, initial_stop_price,
+                            stop_loss_price, profit_target_price, assigned_strategy,
+                            expected_5d_alpha_pct, conviction_pct, bars_held
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                        """,
+                        (
+                            packet.symbol,
+                            packet.sector,
+                            packet.slot_id,
+                            packet.as_of_date,
+                            qty,
+                            fill_px,
+                            gross_notional,
+                            tax_info["total_tax_inr"],
+                            fill_px,
+                            packet.stop_loss_price,
+                            packet.stop_loss_price,
+                            packet.profit_target_price,
+                            packet.assigned_strategy,
+                            packet.expected_5d_alpha_pct,
+                            packet.conviction_pct,
+                        ),
+                    )
                 cur_fill = conn.execute(
                     """
                     INSERT INTO order_fill_ledger (

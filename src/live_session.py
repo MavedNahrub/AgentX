@@ -953,6 +953,15 @@ class LiveSessionController:
         if additional_capital_inr > 0:
             broker = IndiaPaperBroker(db_path=DB_PATH)
             broker.deposit_capital(additional_capital_inr)
+            vault = CryptographicRiskVault()
+            curve_p = f"reports/live_6day_test/intraday_375m_curve_{today}.parquet"
+            cur_min = market_minute_at(get_ist_now())
+            vault.deploy_idle_capital_across_4_slots(
+                broker=broker,
+                as_of_date=today,
+                target_curve_parquet=curve_p,
+                current_minute=cur_min,
+            )
             self._invalidate()
 
         ok_day, reason = is_trading_day(today)

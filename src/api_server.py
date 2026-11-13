@@ -1882,13 +1882,29 @@ def api_go_live(body: Optional[GoLivePayload] = None) -> dict[str, Any]:
 
 @app.post("/api/wallet/deposit")
 def api_wallet_deposit(body: DepositPayload) -> dict[str, Any]:
-    """Deposit additional capital into the trading wallet."""
+    """Deposit additional capital into the trading wallet and deploy across active 4 slots at intraday VWAP."""
     if body.amount_inr <= 0:
         raise HTTPException(status_code=400, detail="Deposit amount must be > 0")
     broker = IndiaPaperBroker(db_path="data/cache/paper_broker_ledger.sqlite")
-    summary = broker.deposit_capital(body.amount_inr)
+    broker.deposit_capital(body.amount_inr)
+    vault = CryptographicRiskVault()
+    today_str = get_ist_now().strftime("%Y-%m-%d")
+    curve_p = f"reports/live_6day_test/intraday_375m_curve_{today_str}.parquet"
+    cur_min = market_minute_at(get_ist_now())
+    topups = vault.deploy_idle_capital_across_4_slots(
+        broker=broker,
+        as_of_date=today_str,
+        target_curve_parquet=curve_p,
+        current_minute=cur_min,
+    )
+    summary_after = broker.get_account_summary()
     _WORKSTATION_CACHE["ledger_sig"] = None
-    return {"status": "deposited", "amount_inr": body.amount_inr, "account_summary": summary}
+    return {
+        "status": "deposited",
+        "amount_inr": body.amount_inr,
+        "account_summary": summary_after,
+        "executed_topups": topups,
+    }
 
 
 @app.post("/api/session/stop-live")

@@ -959,6 +959,141 @@ class CryptographicRiskVault:
         expected_sig = hmac.new(self._hmac_key, canonical_payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected_sig, packet.hmac_sha256_signature)
 
+    def deploy_idle_capital_across_4_slots(
+        self,
+        broker: Any,
+        as_of_date: str,
+        target_curve_parquet: Optional[str] = None,
+        current_minute: Optional[int] = None,
+        min_deploy_threshold_inr: float = 1000.0,
+    ) -> List[Dict[str, Any]]:
+        """
+        Dynamically distributes idle/deposited cash across the 4 active portfolio slots:
+        1. Always enforces exactly 4 slots (scales target slot budget = Total Equity / 4).
+        2. Calculates the real-time Intraday VWAP (or latest price) for each held stock.
+        3. Prioritizes positions with the largest shortfall relative to the 25% target weight.
+        4. Signs and executes top-up BUY orders at Intraday VWAP, deploying idle cash without opening a 5th slot.
+        5. Performs a greedy sweep with residual cash so <= min share price sits idle.
+        """
+        open_pos_df = broker.get_open_positions_df()
+        if open_pos_df.empty:
+            return []
+
+        acct = broker.get_account_summary()
+        avail_cash = float(acct.get("cash_balance_inr", 0.0))
+        total_equity = float(acct.get("total_equity_inr", 0.0))
+        if avail_cash < min_deploy_threshold_inr:
+            return []
+
+        # Target notional per slot is 25% of total account equity (strictly 4 slots)
+        target_slot_notional = round(total_equity / 4.0, 2)
+
+        # Load intraday 1m curve to compute exact intraday VWAP up to current_minute
+        curve_df = pd.DataFrame()
+        if target_curve_parquet and Path(target_curve_parquet).exists():
+            try:
+                curve_df = pd.read_parquet(target_curve_parquet)
+                if current_minute is not None and current_minute > 0 and "minute_num" in curve_df.columns:
+                    curve_df = curve_df[curve_df["minute_num"] <= current_minute]
+            except Exception:
+                curve_df = pd.DataFrame()
+
+        # Compute VWAP and shortfall for each active holding
+        slot_candidates = []
+        for _, row in open_pos_df.iterrows():
+            sym = str(row["symbol"])
+            qty = int(row["quantity"])
+            col_px = f"{sym}_price"
+            if not curve_df.empty and col_px in curve_df.columns:
+                s_px = curve_df[col_px].dropna()
+                vwap = float(s_px.mean()) if not s_px.empty else float(row["current_price"])
+            else:
+                vwap = float(row.get("current_price", row.get("entry_fill_price", 1000.0)))
+
+            cur_notional = qty * vwap
+            shortfall = max(0.0, target_slot_notional - cur_notional)
+            slot_candidates.append({
+                "symbol": sym,
+                "sector": str(row["sector"]),
+                "slot_id": int(row["slot_id"]),
+                "current_quantity": qty,
+                "current_price": vwap,
+                "vwap_exec_price": vwap,
+                "stop_loss_price": float(row["stop_loss_price"]),
+                "profit_target_price": float(row["profit_target_price"]),
+                "assigned_strategy": str(row["assigned_strategy"]),
+                "expected_5d_alpha_pct": float(row["expected_5d_alpha_pct"]),
+                "conviction_pct": float(row["conviction_pct"]),
+                "cur_notional": cur_notional,
+                "shortfall": shortfall,
+            })
+
+        # Sort positions by shortfall descending: largest deficit gets topped up first
+        slot_candidates.sort(key=lambda x: x["shortfall"], reverse=True)
+        step_mult = 1.0 + self.capital_cfg.proportional_round_trip_tax_rate + 0.0003
+
+        executed_topups = []
+        for cand in slot_candidates:
+            if avail_cash < 500.0:
+                break
+            shortfall = cand["shortfall"]
+            if shortfall <= 0:
+                continue
+            budget = min(shortfall, avail_cash)
+            px = cand["vwap_exec_price"]
+            add_shares = int(np.floor((budget / step_mult) / px))
+            if add_shares > 0:
+                cost = add_shares * px * step_mult
+                if cost <= avail_cash:
+                    pkt = self.sign_order_packet(
+                        as_of_date=as_of_date,
+                        side="BUY",
+                        row={
+                            "symbol": cand["symbol"],
+                            "sector": cand["sector"],
+                            "slot_id": cand["slot_id"],
+                            "quantity_shares": add_shares,
+                            "exec_vwap_915": px,
+                            "stop_loss_price": cand["stop_loss_price"],
+                            "profit_target_price": cand["profit_target_price"],
+                            "assigned_strategy": cand["assigned_strategy"],
+                            "expected_5d_alpha_pct": cand["expected_5d_alpha_pct"],
+                            "conviction_pct": cand["conviction_pct"],
+                        },
+                        throttle_mult=1.0,
+                    )
+                    fill_res = broker.execute_signed_order(pkt, exit_reason="MID_SESSION_CAPITAL_TOPUP")
+                    executed_topups.append(fill_res)
+                    avail_cash -= cost
+
+        # Greedy sweep residual cash into lowest-priced stock
+        if avail_cash >= 500.0 and slot_candidates:
+            cheapest = min(slot_candidates, key=lambda x: x["vwap_exec_price"])
+            px = cheapest["vwap_exec_price"]
+            add_shares = int(np.floor((avail_cash / step_mult) / px))
+            if add_shares > 0:
+                pkt = self.sign_order_packet(
+                    as_of_date=as_of_date,
+                    side="BUY",
+                    row={
+                        "symbol": cheapest["symbol"],
+                        "sector": cheapest["sector"],
+                        "slot_id": cheapest["slot_id"],
+                        "quantity_shares": add_shares,
+                        "exec_vwap_915": px,
+                        "stop_loss_price": cheapest["stop_loss_price"],
+                        "profit_target_price": cheapest["profit_target_price"],
+                        "assigned_strategy": cheapest["assigned_strategy"],
+                        "expected_5d_alpha_pct": cheapest["expected_5d_alpha_pct"],
+                        "conviction_pct": cheapest["conviction_pct"],
+                    },
+                    throttle_mult=1.0,
+                )
+                fill_res = broker.execute_signed_order(pkt, exit_reason="MID_SESSION_CAPITAL_TOPUP")
+                executed_topups.append(fill_res)
+
+        return executed_topups
+
 
 def run_section_5_verification() -> None:
     print("=" * 114)
