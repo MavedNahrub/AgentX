@@ -653,18 +653,15 @@ def run_stage_morning(
     paired_df["opening_15m_clv"] = paired_df["symbol"].map(clv_map).fillna(0.55)
     paired_df["opening_15m_body_pct"] = paired_df["symbol"].map(body_map).fillna(0.0)
 
-    # Upgrade 6: Sync 09:30 AM Opening Execution Confirmation with Smoothed Multi-Bar Swing Rank
-    open_rs_rank = (
+    # Upgrade 6: Keep 09:30 AM Opening Execution Confirmation strictly aligned with Master AI Ranking (Tab 4)
+    # Compute opening 15m microstructure metrics for absorption filtering without corrupting the ensemble alpha_rank
+    paired_df["open_rs_rank"] = (
         0.55 * paired_df["opening_15m_body_pct"].rank(pct=True)
         + 0.45 * paired_df["opening_15m_clv"].rank(pct=True)
     )
-    alpha_cs_std = max(0.05, float(paired_df["expected_5d_alpha_pct"].std(ddof=1)))
-    paired_df["expected_5d_alpha_pct"] = (
-        paired_df["expected_5d_alpha_pct"] + (open_rs_rank - 0.50) * 0.75 * alpha_cs_std
-    ).round(4)
-    paired_df = paired_df.sort_values("expected_5d_alpha_pct", ascending=False).reset_index(drop=True)
-    paired_df["alpha_rank"] = np.arange(1, len(paired_df) + 1)
-    paired_df["raw_1d_rank_pct"] = paired_df["expected_5d_alpha_pct"].rank(pct=True).round(4)
+    # Ensure paired_df is strictly ordered by master AI alpha_rank so execution matches Tab 4 exactly
+    paired_df = paired_df.sort_values("alpha_rank", ascending=True).reset_index(drop=True)
+    paired_df["raw_1d_rank_pct"] = (1.0 - (paired_df["alpha_rank"] - 1) / len(paired_df)).round(4)
     paired_df["conviction_pct"] = (paired_df["raw_1d_rank_pct"] * 100.0).round(2)
     paired_df.to_parquet("data/cache/alpha_scout_latest_ranked.parquet", index=False)
 
