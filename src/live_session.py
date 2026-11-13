@@ -953,8 +953,7 @@ class LiveSessionController:
         if additional_capital_inr > 0:
             broker = IndiaPaperBroker(db_path=DB_PATH)
             broker.deposit_capital(additional_capital_inr)
-            if self._on_invalidate:
-                self._on_invalidate()
+            self._invalidate()
 
         ok_day, reason = is_trading_day(today)
         if not ok_day:
