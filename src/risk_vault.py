@@ -677,10 +677,12 @@ class CryptographicRiskVault:
         # Build ordered pool of top unheld Challengers (1-to-1 slot pairing from weakest held slot -> #1 Challenger)
         held_syms = {str(h["symbol"]) for h in current_holdings}
         if has_sym:
+            sort_col = "alpha_rank" if "alpha_rank" in cross_section_df.columns else "expected_5d_alpha_pct"
+            asc = sort_col == "alpha_rank"
             unheld_pool = cross_section_df[~cross_section_df["symbol"].astype(str).isin(held_syms)].sort_values(
-                "expected_5d_alpha_pct", ascending=False
+                sort_col, ascending=asc
             )
-            challenger_pool = [r for _, r in unheld_pool.head(max(4, len(current_holdings))).iterrows()]
+            challenger_pool = [r for _, r in unheld_pool.head(max(6, len(current_holdings))).iterrows()]
         else:
             challenger_pool = []
         if not challenger_pool:
@@ -716,7 +718,12 @@ class CryptographicRiskVault:
             h_open_clv = float(open_clv_map.get(h_sym, 0.50))
 
             # Pick highest-ranked unused Challenger that respects <= max_slots_per_sector after freeing `h_sec`
+            # Priority 1: Pick an unheld challenger from an unrepresented active sector (0 slots currently held)
+            # Priority 2: Pick the highest-ranked candidate respecting max_slots_per_sector
             chosen_chal = challenger_row
+            best_unrep = None
+            best_general = None
+
             for cand_c in challenger_pool:
                 c_sym = str(cand_c["symbol"])
                 c_sec = str(cand_c["sector"])
@@ -724,8 +731,14 @@ class CryptographicRiskVault:
                     continue
                 proj_sec_cnt = live_sec_counts.get(c_sec, 0) - (1 if c_sec == h_sec else 0)
                 if proj_sec_cnt < self.capital_cfg.max_slots_per_sector:
-                    chosen_chal = cand_c
-                    break
+                    if best_general is None:
+                        best_general = cand_c
+                    # Prefer unrepresented active sectors (0 current slots)
+                    if proj_sec_cnt == 0:
+                        best_unrep = cand_c
+                        break
+
+            chosen_chal = best_unrep if best_unrep is not None else (best_general or challenger_row)
 
             chal_sym = str(chosen_chal["symbol"])
             chal_alpha = float(chosen_chal["expected_5d_alpha_pct"])

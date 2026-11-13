@@ -1418,6 +1418,7 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
         top_strat = str(top_cand.get("assigned_strategy", "Momentum Breakout"))
 
         open_syms = [str(r["symbol"]) for _, r in open_pos_df.iterrows()] if not open_pos_df.empty else []
+        session_dt = str(active_session_date)
 
         if top_sym and top_sym not in open_syms:
             proof_dir = Path("reports/live_6day_test")
