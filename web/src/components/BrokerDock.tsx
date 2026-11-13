@@ -517,17 +517,27 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
 
   const filteredJournal = useMemo(() => {
     const q = journalSearch.trim().toUpperCase();
-    return ws.dock.journal_entries.filter((j) => {
-      if (journalCat !== "ALL" && j.category !== journalCat) return false;
-      if (
-        q &&
-        !j.symbol.toUpperCase().includes(q) &&
-        !j.headline.toUpperCase().includes(q)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    return ws.dock.journal_entries
+      .filter((j) => {
+        if (journalCat !== "ALL" && j.category !== journalCat) return false;
+        if (
+          q &&
+          !j.symbol.toUpperCase().includes(q) &&
+          !j.headline.toUpperCase().includes(q)
+        ) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const aAudit = a.category.includes("Why #1 Pick");
+        const bAudit = b.category.includes("Why #1 Pick");
+        if (aAudit && !bAudit) return -1;
+        if (!aAudit && bAudit) return 1;
+        const dtA = a.date || "";
+        const dtB = b.date || "";
+        return dtB.localeCompare(dtA);
+      });
   }, [ws.dock.journal_entries, journalCat, journalSearch]);
 
   const whyNotBoughtEntry = useMemo(() => {
@@ -1353,16 +1363,30 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
                       )}
                       <span>{j.headline}</span>
                     </div>
-                    <span
-                      className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border"
-                      style={{
-                        background: "var(--surface-subtle)",
-                        borderColor: "var(--card-border-strong)",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      {j.category}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {j.date && (
+                        <span
+                          className="text-[11px] font-bold px-2 py-0.5 rounded-md border"
+                          style={{
+                            background: "var(--surface-subtle)",
+                            borderColor: "var(--card-border-strong)",
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          📅 {j.date}
+                        </span>
+                      )}
+                      <span
+                        className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border"
+                        style={{
+                          background: "var(--surface-subtle)",
+                          borderColor: "var(--card-border-strong)",
+                          color: "var(--text-muted)",
+                        }}
+                      >
+                        {j.category}
+                      </span>
+                    </div>
                   </div>
 
                 <p className="text-[12.8px] leading-relaxed mb-3" style={{ color: "var(--text-muted)" }}>

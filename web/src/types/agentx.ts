@@ -223,6 +223,7 @@ export interface OperatorState {
 }
 
 export interface JournalEntry {
+  date?: string;
   category: string;
   symbol: string;
   headline: string;

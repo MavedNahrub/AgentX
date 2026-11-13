@@ -1451,6 +1451,7 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
 
                 journal_entries.append(
                     {
+                        "date": str(session_dt),
                         "category": "🛡️ Why #1 Pick Wasn't Bought",
                         "symbol": top_sym,
                         "headline": f"Why #{top_sym} (Rank #1 Today) Wasn't Bought — All 4 Slots Deployed in Winning Swings",
@@ -1498,6 +1499,7 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
 
         journal_entries.append(
             {
+                "date": o_dt,
                 "category": "🛒 Stocks Bought & Held",
                 "symbol": o_sym,
                 "headline": f"Bought {o_qty} Shares of {o_sym} ({o_sec}) at ₹{o_buy:,.2f}",
@@ -1521,6 +1523,7 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
         if o_stop > o_init_stop + 0.01:
             journal_entries.append(
                 {
+                    "date": str(session_dt),
                     "category": "🔒 Safety Floor Raised",
                     "symbol": o_sym,
                     "headline": f"Raised Safety Stop-Loss for {o_sym}: ₹{o_init_stop:,.2f} → ₹{o_stop:,.2f}",
@@ -1556,6 +1559,7 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
 
         journal_entries.append(
             {
+                "date": sw_sdt,
                 "category": "💰 Profit Booked (Sold)",
                 "symbol": sw_sym,
                 "headline": f"Sold {sw_sh} Shares of {sw_sym} ({sw_sec}) at ₹{sw_spx:,.2f} — Booked +₹{sw_npnl:,.2f} Net Profit",
@@ -1592,11 +1596,13 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
         j_conv = float(jrow.get("conviction_pct", 85.0) or 85.0)
         j_why = _humanize_shap_driver(jrow.get("shap_driver_1_plain", ""))
 
+        j_entry_dt = str(jrow.get("as_of_date", session_dt))
         if j_cat_raw == "LIVE_ENTRY_AND_SIZING":
             if j_sym in seen_buy_syms:
                 continue
             journal_entries.append(
                 {
+                    "date": j_entry_dt,
                     "category": "🛒 Stocks Bought & Held",
                     "symbol": j_sym,
                     "headline": f"Bought {j_qty} Shares of {j_sym} ({j_sec}) at ₹{j_px:,.2f}",
@@ -1621,6 +1627,7 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
             if "CHURN" in verdict_raw or j_tax > 0:
                 journal_entries.append(
                     {
+                        "date": j_entry_dt,
                         "category": "🛡️ Risk & Tax Protection",
                         "symbol": j_sym,
                         "headline": f"Kept Current Stock Instead of {j_sym} — Saved ₹{j_tax:,.2f} in Unnecessary Taxes",
@@ -1639,6 +1646,7 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
             else:
                 journal_entries.append(
                     {
+                        "date": j_entry_dt,
                         "category": "🛡️ Risk & Tax Protection",
                         "symbol": j_sym,
                         "headline": f"Skipped Weak {j_sec} Sector — Invested ₹0 to Protect Your Capital",
@@ -1653,6 +1661,15 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
                         ],
                     }
                 )
+
+    # Sort all trade stories strictly in reverse chronological order (newest date first)
+    # Keep "Why #1 Pick Wasn't Bought" pinned at index 0 if present
+    if journal_entries and "Why #1 Pick" in journal_entries[0].get("category", ""):
+        pinned_audit = [journal_entries[0]]
+        rest_entries = sorted(journal_entries[1:], key=lambda x: str(x.get("date", "")), reverse=True)
+        journal_entries = pinned_audit + rest_entries
+    else:
+        journal_entries.sort(key=lambda x: str(x.get("date", "")), reverse=True)
 
     top_sym_sample = str(data["ranked_df"]["symbol"].iloc[0]) if not data["ranked_df"].empty else "NIFTY50"
     top_alpha_sample = float(data["ranked_df"]["expected_5d_alpha_pct"].iloc[0]) if not data["ranked_df"].empty else 0.0
