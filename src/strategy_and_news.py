@@ -460,6 +460,127 @@ class DateBoundedNewsVetoEngine:
         except Exception:
             return []
 
+    def classify_headline(self, text: str) -> Dict[str, object]:
+        """Classifies a single headline into a catalyst category, sentiment label, and [-1, +1] score."""
+        low = text.lower()
+        for cat_name, regex_list in self.NEGATIVE_PATTERNS.items():
+            for pat in regex_list:
+                if re.search(pat, low, re.IGNORECASE):
+                    return {
+                        "catalyst_type": cat_name,
+                        "sentiment": "BEARISH",
+                        "sentiment_score": -0.80,
+                    }
+        for pat in self.POSITIVE_PATTERNS:
+            if re.search(pat, low, re.IGNORECASE):
+                return {
+                    "catalyst_type": "EARNINGS_BEAT_OR_ORDER_WIN",
+                    "sentiment": "BULLISH",
+                    "sentiment_score": 0.70,
+                }
+        if re.search(r"\b(rises|gains|surges|rally|rallies|jumps|climbs|high|outperforms|strong|growth|expands|launch)\b", low):
+            return {
+                "catalyst_type": "POSITIVE_MOMENTUM_OR_EXPANSION",
+                "sentiment": "BULLISH",
+                "sentiment_score": 0.45,
+            }
+        if re.search(r"\b(falls|drops|slips|declines|slides|weak|dip|pressure|cut|lower|selloff)\b", low):
+            return {
+                "catalyst_type": "PRICE_PULLBACK_OR_SECTOR_DRAG",
+                "sentiment": "BEARISH",
+                "sentiment_score": -0.45,
+            }
+        return {
+            "catalyst_type": "NEUTRAL_CORP_UPDATE",
+            "sentiment": "NEUTRAL",
+            "sentiment_score": 0.10,
+        }
+
+    def fetch_stock_news_records(
+        self,
+        symbol: str,
+        as_of_date: pd.Timestamp,
+        lookback_days: int = 45,
+        max_items: int = 12,
+    ) -> List[Dict[str, object]]:
+        """
+        Fetches structured news records (title, source, pub_date, link, catalyst_type, sentiment)
+        from Google News RSS for single-stock deep intelligence and historical news-to-price auditing.
+        """
+        date_str = as_of_date.strftime("%Y-%m-%d")
+        cache_key = f"RECORDS_{symbol}_{date_str}_{lookback_days}d"
+        if cache_key in self._cache and isinstance(self._cache[cache_key], dict):
+            recs = self._cache[cache_key].get("records", [])
+            if isinstance(recs, list) and len(recs) > 0:
+                return recs
+
+        after_str = (as_of_date - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+        before_str = (as_of_date + timedelta(days=1)).strftime("%Y-%m-%d")
+        queries = [
+            f'"{symbol}" NSE stock after:{after_str} before:{before_str}',
+            f'{symbol} share price NSE India',
+        ]
+        records: List[Dict[str, object]] = []
+        seen_titles = set()
+
+        for q in queries:
+            if len(records) >= max_items:
+                break
+            url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=en-IN&gl=IN&ceid=IN:en"
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=4) as resp:
+                    xml_bytes = resp.read()
+                root = ET.fromstring(xml_bytes)
+                for item in root.findall(".//item"):
+                    if len(records) >= max_items:
+                        break
+                    t_el = item.find("title")
+                    d_el = item.find("pubDate")
+                    s_el = item.find("source")
+                    l_el = item.find("link")
+                    raw_title = t_el.text.strip() if (t_el is not None and t_el.text) else ""
+                    if not raw_title or raw_title in seen_titles:
+                        continue
+                    seen_titles.add(raw_title)
+
+                    source_name = s_el.text.strip() if (s_el is not None and s_el.text) else "NSE Market Wire"
+                    if " - " in raw_title and source_name == "NSE Market Wire":
+                        parts = raw_title.rsplit(" - ", 1)
+                        raw_title, source_name = parts[0].strip(), parts[1].strip()
+                    elif raw_title.endswith(f" - {source_name}"):
+                        raw_title = raw_title[: -len(f" - {source_name}")].strip()
+
+                    pub_raw = d_el.text.strip() if (d_el is not None and d_el.text) else ""
+                    try:
+                        pub_dt = pd.to_datetime(pub_raw, utc=True).tz_convert(None)
+                        pub_date_str = pub_dt.strftime("%Y-%m-%d")
+                    except Exception:
+                        pub_date_str = date_str
+
+                    cls_info = self.classify_headline(raw_title)
+                    records.append(
+                        {
+                            "title": raw_title,
+                            "source": source_name,
+                            "published_date": pub_date_str,
+                            "link": l_el.text.strip() if (l_el is not None and l_el.text) else "",
+                            "catalyst_type": str(cls_info["catalyst_type"]),
+                            "sentiment": str(cls_info["sentiment"]),
+                            "sentiment_score": float(cls_info["sentiment_score"]),
+                        }
+                    )
+            except Exception:
+                continue
+
+        if records:
+            self._cache[cache_key] = {"records": records}
+            self._save_cache()
+        return records
+
     def evaluate_catalyst_veto(
         self,
         symbol: str,

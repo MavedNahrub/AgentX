@@ -293,3 +293,149 @@ export interface LiveTickMessage {
   current_minute?: number;
   live_message?: string;
 }
+
+export interface StockIntelligencePayload {
+  symbol: string;
+  as_of_date: string;
+  available_stocks: {
+    symbol: string;
+    sector: string;
+    rank: number;
+    price: number;
+    regime: string;
+    exp_5d_alpha_pct: number;
+  }[];
+  strategy_analysis: {
+    symbol: string;
+    sector: string;
+    sector_status: string;
+    sector_mean_alpha_pct: number;
+    alpha_rank: number;
+    conviction_pct: number;
+    micro_regime: string;
+    assigned_strategy: string;
+    current_price: number;
+    exec_vwap_915: number;
+    stop_loss_price: number;
+    profit_target_price: number;
+    reward_risk_ratio: number;
+    empirical_tail_stop_pct: number;
+    parkinson_vol_21d_pct: number;
+    ret_std_1d_pct: number;
+    efficiency_ratio_21d: number;
+    inst_clv_5d: number;
+    opening_15m_clv: number;
+    opening_15m_body_pct: number;
+    shap_driver_1: string;
+    shap_driver_2: string;
+    shap_driver_3: string;
+    shap_top_drag: string;
+    dominant_fib_lens: string;
+    exit_geometry_summary: string;
+  };
+  backtest_summary: {
+    overall: {
+      total_signals: number;
+      win_rate_pct: number;
+      avg_post_tax_ret_pct: number;
+      avg_alpha_vs_nifty_pct: number;
+      profit_factor: number;
+      cum_compounded_ret_pct: number;
+      best_strategy: string;
+    };
+    playbooks: {
+      strategy: string;
+      signals_count: number;
+      win_rate_pct: number;
+      avg_gross_ret_pct: number;
+      avg_post_tax_ret_pct: number;
+      avg_alpha_vs_nifty_pct: number;
+      profit_factor: number;
+      is_assigned: boolean;
+    }[];
+    recent_signals: {
+      entry_date: string;
+      strategy: string;
+      entry_price: number;
+      exit_price_5d: number;
+      gross_ret_pct: number;
+      post_tax_net_ret_pct: number;
+      nifty_5d_ret_pct: number;
+      net_alpha_pct: number;
+      outcome: string;
+    }[];
+    real_ledger_trades: {
+      date: string;
+      side: string;
+      quantity: number;
+      fill_price: number;
+      notional_inr: number;
+      tax_inr: number;
+      realized_net_pnl_inr: number;
+      reason: string;
+      strategy: string;
+    }[];
+  };
+  news_report: {
+    symbol: string;
+    as_of_date: string;
+    headlines_count: number;
+    overall_sentiment_label: string;
+    overall_sentiment_score: number;
+    primary_catalyst_type: string;
+    veto_trade: boolean;
+    is_already_priced_in: boolean;
+    stock_tail_noise_pct: number;
+    recent_1d_return_pct: number;
+    recent_3d_return_pct: number;
+    executive_headline: string;
+    running_market_narrative: string;
+    historical_news_reaction_summary: string;
+    news_records: {
+      title: string;
+      source: string;
+      published_date: string;
+      link: string;
+      catalyst_type: string;
+      sentiment: string;
+      sentiment_score: number;
+      price_on_date: number;
+      post_news_1d_ret_pct: number | null;
+      post_news_3d_ret_pct: number | null;
+      reaction_summary: string;
+    }[];
+    historical_tape_catalysts: {
+      date: string;
+      event_type: string;
+      day_return_pct: number;
+      rvol_multiple: number;
+      close_price: number;
+      subsequent_3d_ret_pct: number | null;
+    }[];
+  };
+  future_prediction: {
+    current_price: number;
+    predicted_1d_price: number;
+    predicted_3d_price: number;
+    predicted_5d_price: number;
+    quant_expected_5d_alpha_pct: number;
+    backtest_expected_5d_pct: number;
+    news_sentiment_adj_pct: number;
+    blended_5d_return_pct: number;
+    statutory_friction_hurdle_pct: number;
+    net_post_tax_edge_pct: number;
+    stop_loss_price: number;
+    profit_target_price: number;
+    verdict_badge: string;
+    verdict_color: string;
+    recommended_action: string;
+    full_synthesis_thesis: string;
+    day_by_day_forecast: {
+      horizon: string;
+      predicted_price: number;
+      expected_return_pct: number;
+      bull_case_price: number;
+      bear_case_price: number;
+    }[];
+  };
+}

@@ -2,7 +2,13 @@
 
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ColorType, LineStyle, Time, createChart } from "lightweight-charts";
-import type { CurvePoint, FriendlyEvent, WalkForwardPoint, WorkstationPayload } from "@/types/agentx";
+import type {
+  CurvePoint,
+  FriendlyEvent,
+  StockIntelligencePayload,
+  WalkForwardPoint,
+  WorkstationPayload,
+} from "@/types/agentx";
 
 interface BrokerDockProps {
   ws: WorkstationPayload;
@@ -16,6 +22,7 @@ const DOCK_TABS = [
   "📈 3. 6-Month Growth Proof",
   "🏆 4. Top 20 AI Stock Picks",
   "📖 5. Why We Traded (Simple English)",
+  "🔍 6. Stock Deep-Dive, Backtest & News Report",
 ];
 
 function GenericResponsiveTable({
@@ -347,6 +354,41 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
   const [horizonTableMode, setHorizonTableMode] = useState<"SWING_5D" | "MTM_1D">("SWING_5D");
   const [journalCat, setJournalCat] = useState<string>("ALL");
   const [journalSearch, setJournalSearch] = useState<string>("");
+
+  // Tab 6: Single-Stock Deep Intelligence, Strategy Backtest & Market News Report
+  const [stockQuery, setStockQuery] = useState<string>(ws.portfolio_summary.top_ranked_symbol || "EICHERMOT");
+  const [stockIntel, setStockIntel] = useState<StockIntelligencePayload | null>(null);
+  const [intelLoading, setIntelLoading] = useState<boolean>(false);
+  const [intelError, setIntelError] = useState<string | null>(null);
+
+  const fetchStockIntelligence = async (symToAnalyze: string, syncChart = false) => {
+    const q = symToAnalyze.trim() || "EICHERMOT";
+    setIntelLoading(true);
+    setIntelError(null);
+    try {
+      const res = await fetch(`/api/stock-intelligence/${encodeURIComponent(q)}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} while analyzing ${q}`);
+      }
+      const data: StockIntelligencePayload = await res.json();
+      setStockIntel(data);
+      setStockQuery(data.symbol);
+      if (syncChart && data.symbol) {
+        onSelectSymbol(data.symbol);
+      }
+    } catch (err) {
+      setIntelError(err instanceof Error ? err.message : "Failed to analyze stock");
+    } finally {
+      setIntelLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 5 && !stockIntel && !intelLoading) {
+      void fetchStockIntelligence(stockQuery, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const tablistRef = useRef<HTMLDivElement | null>(null);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -1410,6 +1452,588 @@ export default function BrokerDock({ ws, isDark, onSelectSymbol }: BrokerDockPro
             );
           })}
         </div>
+        </div>
+      </div>
+
+      {/* Panel 5 (Tab 6): Single-Stock Deep-Dive, Strategy Backtest & Market News Report */}
+      <div
+        role="tabpanel"
+        aria-labelledby={`${baseId}-tab-5`}
+        hidden={activeTab !== 5}
+      >
+        <div className="pt-4 flex flex-col gap-4">
+          {/* Header & Stock Search Form */}
+          <div
+            className="rounded-xl p-4 border flex flex-col gap-3"
+            style={{
+              background: "var(--surface-subtle)",
+              borderColor: "var(--card-border-strong)",
+            }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[15px] font-extrabold" style={{ color: "var(--text-main)" }}>
+                  🔍 AI Single-Stock Strategy Analyzer, 2-Year Backtester &amp; Live Market News Report
+                </h3>
+                <p className="text-[12px] font-semibold mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  Enter any NSE stock name or ticker (e.g., <b>EICHERMOT</b>, <b>APOLLOHOSP</b>, <b>NESTLEIND</b>, <b>BAJFINANCE</b>, <b>RELIANCE</b>, <b>SBIN</b>) to run a full strategy backtest, inspect historical &amp; running market news, and generate a calibrated 5-day price prediction.
+                </p>
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void fetchStockIntelligence(stockQuery, true);
+                }}
+                className="flex flex-wrap items-center gap-2 w-full sm:w-auto"
+              >
+                <input
+                  type="text"
+                  aria-label="Enter stock name or NSE symbol"
+                  placeholder="Type stock name or symbol (e.g. EICHERMOT, Apollo, Nestle)..."
+                  value={stockQuery}
+                  onChange={(e) => setStockQuery(e.target.value)}
+                  className="rounded-xl px-3.5 py-2 text-[12.5px] font-bold border outline-none min-w-[260px] flex-1"
+                  style={{
+                    background: "var(--card-bg)",
+                    borderColor: "var(--card-border-strong)",
+                    color: "var(--text-main)",
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={intelLoading}
+                  className="rounded-xl px-4 py-2 text-[12.5px] font-black text-white border-none cursor-pointer transition-all"
+                  style={{ background: "var(--green-btn)" }}
+                >
+                  {intelLoading ? "⏳ Analyzing Stock & News..." : "🔍 Analyze Stock & News Report"}
+                </button>
+              </form>
+            </div>
+
+            {/* Quick-Select Stock Pills (Top Ranked & Popular Universe Stocks) */}
+            {stockIntel?.available_stocks && stockIntel.available_stocks.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t" style={{ borderColor: "var(--grid-line)" }}>
+                <span className="text-[11px] font-extrabold mr-1" style={{ color: "var(--text-muted)" }}>
+                  ⚡ Quick Select Stock (#Rank):
+                </span>
+                {stockIntel.available_stocks.slice(0, 16).map((st) => {
+                  const isSel = stockIntel.symbol === st.symbol;
+                  return (
+                    <button
+                      key={st.symbol}
+                      type="button"
+                      onClick={() => {
+                        setStockQuery(st.symbol);
+                        void fetchStockIntelligence(st.symbol, true);
+                      }}
+                      className="rounded-lg px-2.5 py-1 text-[11px] font-extrabold border cursor-pointer transition-all"
+                      style={{
+                        background: isSel ? "var(--yellow-accent)" : "var(--card-bg)",
+                        color: isSel ? "#111827" : "var(--text-main)",
+                        borderColor: isSel ? "var(--yellow-border)" : "var(--card-border-strong)",
+                      }}
+                    >
+                      #{st.rank} {st.symbol}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {intelError && (
+            <div
+              className="rounded-xl p-4 border text-[12.5px] font-bold"
+              style={{
+                background: "rgba(239, 68, 68, 0.08)",
+                borderColor: "var(--red-main)",
+                color: "var(--red-main)",
+              }}
+            >
+              ⚠️ {intelError}
+            </div>
+          )}
+
+          {intelLoading && !stockIntel && (
+            <div className="rounded-xl p-8 border text-center text-[13px] font-bold" style={{ background: "var(--card-bg)", borderColor: "var(--card-border-strong)" }}>
+              ⏳ Running 2-Year Strategy Tournament Backtest, TreeSHAP Attribution &amp; Live Google News RSS Analysis for <b>{stockQuery}</b>...
+            </div>
+          )}
+
+          {stockIntel && (
+            <>
+              {/* 1. FUTURE PRICE PREDICTION & FINAL AI VERDICT BANNER */}
+              <div
+                className="rounded-xl p-4 border flex flex-col gap-3.5"
+                style={{
+                  background: "var(--card-bg)",
+                  borderColor: "var(--card-border-strong)",
+                }}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b" style={{ borderColor: "var(--grid-line)" }}>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="text-[18px] font-black" style={{ color: "var(--text-main)" }}>
+                      NSE:{stockIntel.symbol}
+                    </span>
+                    <span
+                      className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-md border"
+                      style={{
+                        background: "var(--surface-subtle)",
+                        borderColor: "var(--card-border-strong)",
+                        color: "var(--text-main)",
+                      }}
+                    >
+                      Rank #{stockIntel.strategy_analysis.alpha_rank} / 50 • {stockIntel.strategy_analysis.sector} ({stockIntel.strategy_analysis.sector_status.split(" ")[0]})
+                    </span>
+                    <span
+                      className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-md border"
+                      style={{
+                        background: "var(--surface-subtle)",
+                        borderColor: "var(--card-border-strong)",
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      Regime: {stockIntel.strategy_analysis.micro_regime} → Strategy: {stockIntel.strategy_analysis.assigned_strategy}
+                    </span>
+                  </div>
+                  <span
+                    className="text-[12px] font-black px-3 py-1 rounded-full border"
+                    style={{
+                      background:
+                        stockIntel.future_prediction.verdict_color === "green"
+                          ? "rgba(22, 163, 74, 0.14)"
+                          : stockIntel.future_prediction.verdict_color === "yellow"
+                          ? "rgba(245, 158, 11, 0.16)"
+                          : "rgba(220, 38, 38, 0.14)",
+                      color:
+                        stockIntel.future_prediction.verdict_color === "green"
+                          ? "var(--green-main)"
+                          : stockIntel.future_prediction.verdict_color === "yellow"
+                          ? "#D97706"
+                          : "var(--red-main)",
+                      borderColor:
+                        stockIntel.future_prediction.verdict_color === "green"
+                          ? "var(--green-main)"
+                          : stockIntel.future_prediction.verdict_color === "yellow"
+                          ? "#F59E0B"
+                          : "var(--red-main)",
+                    }}
+                  >
+                    {stockIntel.future_prediction.verdict_badge}
+                  </span>
+                </div>
+
+                {/* 5 Key Price & Alpha Prediction Boxes */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  <div className="rounded-xl p-3 border" style={{ background: "var(--input-bg)", borderColor: "var(--card-border-strong)" }}>
+                    <div className="text-[10.8px] font-bold" style={{ color: "var(--text-muted)" }}>
+                      📍 Current Spot Price
+                    </div>
+                    <div className="tabular-nums text-[17px] font-black font-mono mt-0.5">
+                      ₹{stockIntel.future_prediction.current_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-[10.5px] font-semibold" style={{ color: "var(--text-soft)" }}>
+                      09:30 VWAP: ₹{stockIntel.strategy_analysis.exec_vwap_915.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl p-3 border" style={{ background: "var(--input-bg)", borderColor: "var(--card-border-strong)" }}>
+                    <div className="text-[10.8px] font-bold" style={{ color: "var(--text-muted)" }}>
+                      🔮 1-Day Predicted Price
+                    </div>
+                    <div className="tabular-nums text-[17px] font-black font-mono mt-0.5" style={{ color: "var(--green-main)" }}>
+                      ₹{stockIntel.future_prediction.predicted_1d_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-[10.5px] font-semibold" style={{ color: "var(--text-soft)" }}>
+                      1D Vol Scale: ±{stockIntel.strategy_analysis.ret_std_1d_pct.toFixed(2)}%
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl p-3 border" style={{ background: "var(--input-bg)", borderColor: "var(--card-border-strong)" }}>
+                    <div className="text-[10.8px] font-bold" style={{ color: "var(--text-muted)" }}>
+                      🚀 5-Day Predicted Price
+                    </div>
+                    <div
+                      className="tabular-nums text-[17px] font-black font-mono mt-0.5"
+                      style={{
+                        color:
+                          stockIntel.future_prediction.blended_5d_return_pct >= 0
+                            ? "var(--green-main)"
+                            : "var(--red-main)",
+                      }}
+                    >
+                      ₹{stockIntel.future_prediction.predicted_5d_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })} (
+                      {stockIntel.future_prediction.blended_5d_return_pct >= 0 ? "+" : ""}
+                      {stockIntel.future_prediction.blended_5d_return_pct.toFixed(2)}%)
+                    </div>
+                    <div className="text-[10.5px] font-semibold" style={{ color: "var(--text-soft)" }}>
+                      Net Post-Tax Edge:{" "}
+                      <b>
+                        {stockIntel.future_prediction.net_post_tax_edge_pct >= 0 ? "+" : ""}
+                        {stockIntel.future_prediction.net_post_tax_edge_pct.toFixed(2)}%
+                      </b>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl p-3 border" style={{ background: "var(--input-bg)", borderColor: "var(--card-border-strong)" }}>
+                    <div className="text-[10.8px] font-bold" style={{ color: "var(--text-muted)" }}>
+                      🛡️ Empirical GTT Stop-Loss
+                    </div>
+                    <div className="tabular-nums text-[17px] font-black font-mono mt-0.5" style={{ color: "var(--red-main)" }}>
+                      ₹{stockIntel.future_prediction.stop_loss_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-[10.5px] font-semibold" style={{ color: "var(--text-soft)" }}>
+                      95th-Pctl Tail Noise: -{stockIntel.strategy_analysis.empirical_tail_stop_pct.toFixed(2)}%
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl p-3 border" style={{ background: "var(--input-bg)", borderColor: "var(--card-border-strong)" }}>
+                    <div className="text-[10.8px] font-bold" style={{ color: "var(--text-muted)" }}>
+                      🎯 Empirical Runner Target
+                    </div>
+                    <div className="tabular-nums text-[17px] font-black font-mono mt-0.5" style={{ color: "var(--green-main)" }}>
+                      ₹{stockIntel.future_prediction.profit_target_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-[10.5px] font-semibold" style={{ color: "var(--text-soft)" }}>
+                      Reward / Risk Ratio: <b>{stockIntel.strategy_analysis.reward_risk_ratio.toFixed(2)}x</b>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Synthesis Narrative & Recommended Action */}
+                <div
+                  className="rounded-xl p-3.5 border text-[12.5px] leading-relaxed"
+                  style={{
+                    background: "var(--surface-subtle)",
+                    borderColor: "var(--card-border-strong)",
+                    color: "var(--text-main)",
+                  }}
+                >
+                  <div className="font-extrabold mb-1">
+                    🧭 AI Synthesis &amp; Price Prediction Thesis:
+                  </div>
+                  <p style={{ color: "var(--text-muted)" }}>{stockIntel.future_prediction.full_synthesis_thesis}</p>
+                  <div className="mt-2 pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-[12px] font-extrabold" style={{ borderColor: "var(--grid-line)" }}>
+                    <span>💡 Action Plan: {stockIntel.future_prediction.recommended_action}</span>
+                    <span>
+                      📊 Prediction Components: Quant {stockIntel.future_prediction.quant_expected_5d_alpha_pct >= 0 ? "+" : ""}
+                      {stockIntel.future_prediction.quant_expected_5d_alpha_pct.toFixed(2)}% • Backtest{" "}
+                      {stockIntel.future_prediction.backtest_expected_5d_pct >= 0 ? "+" : ""}
+                      {stockIntel.future_prediction.backtest_expected_5d_pct.toFixed(2)}% • News Adj{" "}
+                      {stockIntel.future_prediction.news_sentiment_adj_pct >= 0 ? "+" : ""}
+                      {stockIntel.future_prediction.news_sentiment_adj_pct.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* 5-Day Day-by-Day Price Trajectory Table */}
+                <GenericResponsiveTable
+                  caption={`5-Day Calibrated Price Trajectory Cone for NSE:${stockIntel.symbol} (Quant + Backtest + News)`}
+                  columns={[
+                    "Horizon",
+                    "Predicted Price",
+                    "Expected Move",
+                    "Bull-Case (75th Pctl Excursion)",
+                    "Bear-Case (GTT Stop Protected Floor)",
+                  ]}
+                  rows={stockIntel.future_prediction.day_by_day_forecast.map((d) => ({
+                    Horizon: d.horizon,
+                    "Predicted Price": `₹${d.predicted_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+                    "Expected Move": `${d.expected_return_pct >= 0 ? "+" : ""}${d.expected_return_pct.toFixed(2)}%`,
+                    "Bull-Case (75th Pctl Excursion)": `🟢 ₹${d.bull_case_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+                    "Bear-Case (GTT Stop Protected Floor)": `🛡️ ₹${d.bear_case_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+                  }))}
+                  rowHeaderKey="Horizon"
+                />
+              </div>
+
+              {/* 2. MARKET NEWS REPORT & HISTORICAL NEWS-TO-PRICE IMPACT AUDIT */}
+              <div
+                className="rounded-xl p-4 border flex flex-col gap-3.5"
+                style={{
+                  background: "var(--card-bg)",
+                  borderColor: "var(--card-border-strong)",
+                }}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b" style={{ borderColor: "var(--grid-line)" }}>
+                  <div>
+                    <h4 className="text-[15px] font-extrabold" style={{ color: "var(--text-main)" }}>
+                      📰 Market News Intelligence Report &amp; Historical News-to-Price Audit ({stockIntel.symbol})
+                    </h4>
+                    <p className="text-[11.8px] font-semibold" style={{ color: "var(--text-muted)" }}>
+                      {stockIntel.news_report.executive_headline}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className="text-[11px] font-extrabold px-2.5 py-1 rounded-full border"
+                      style={{
+                        background: "var(--surface-subtle)",
+                        borderColor: "var(--card-border-strong)",
+                        color:
+                          stockIntel.news_report.overall_sentiment_score >= 0.15
+                            ? "var(--green-main)"
+                            : stockIntel.news_report.overall_sentiment_score <= -0.15
+                            ? "var(--red-main)"
+                            : "var(--text-main)",
+                      }}
+                    >
+                      News Sentiment: {stockIntel.news_report.overall_sentiment_label} (
+                      {stockIntel.news_report.overall_sentiment_score >= 0 ? "+" : ""}
+                      {stockIntel.news_report.overall_sentiment_score.toFixed(2)})
+                    </span>
+                    <span
+                      className="text-[11px] font-extrabold px-2.5 py-1 rounded-full border"
+                      style={{
+                        background: "var(--surface-subtle)",
+                        borderColor: "var(--card-border-strong)",
+                        color: stockIntel.news_report.veto_trade ? "var(--red-main)" : "var(--green-main)",
+                      }}
+                    >
+                      {stockIntel.news_report.veto_trade ? "🛑 NEWS VETO ACTIVE" : "✅ NEWS GATE CLEAR"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Two-Column Executive News Briefing */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  <div
+                    className="rounded-xl p-3.5 border text-[12.3px] leading-relaxed"
+                    style={{
+                      background: "var(--surface-subtle)",
+                      borderColor: "var(--card-border-strong)",
+                    }}
+                  >
+                    <div className="font-extrabold mb-1" style={{ color: "var(--text-main)" }}>
+                      📡 What News Is Running in the Market Right Now:
+                    </div>
+                    <p style={{ color: "var(--text-muted)" }}>{stockIntel.news_report.running_market_narrative}</p>
+                  </div>
+
+                  <div
+                    className="rounded-xl p-3.5 border text-[12.3px] leading-relaxed"
+                    style={{
+                      background: "var(--surface-subtle)",
+                      borderColor: "var(--card-border-strong)",
+                    }}
+                  >
+                    <div className="font-extrabold mb-1" style={{ color: "var(--text-main)" }}>
+                      📜 Historical News &amp; Volume-Shock Reaction Pattern:
+                    </div>
+                    <p style={{ color: "var(--text-muted)" }}>{stockIntel.news_report.historical_news_reaction_summary}</p>
+                  </div>
+                </div>
+
+                {/* Live & Historical Market News Headlines Table */}
+                <GenericResponsiveTable
+                  caption={`Market News Records & Subsequent Price Reaction Audit for NSE:${stockIntel.symbol}`}
+                  columns={[
+                    "Date",
+                    "Headline Running in Market",
+                    "Source",
+                    "Catalyst Type",
+                    "Sentiment",
+                    "Price on News",
+                    "3D Reaction & Absorption Verdict",
+                  ]}
+                  rows={stockIntel.news_report.news_records.map((nr) => ({
+                    Date: nr.published_date,
+                    "Headline Running in Market": nr.title,
+                    Source: nr.source,
+                    "Catalyst Type": nr.catalyst_type,
+                    Sentiment:
+                      nr.sentiment === "BULLISH"
+                        ? `🟢 BULLISH (${nr.sentiment_score >= 0 ? "+" : ""}${nr.sentiment_score.toFixed(2)})`
+                        : nr.sentiment === "BEARISH"
+                        ? `🔴 BEARISH (${nr.sentiment_score.toFixed(2)})`
+                        : `⚖️ NEUTRAL (+${nr.sentiment_score.toFixed(2)})`,
+                    "Price on News": `₹${nr.price_on_date.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+                    "3D Reaction & Absorption Verdict": nr.reaction_summary,
+                  }))}
+                  rowHeaderKey="Date"
+                />
+
+                {/* Historical Institutional Price-Volume Catalyst Shocks */}
+                {stockIntel.news_report.historical_tape_catalysts.length > 0 && (
+                  <GenericResponsiveTable
+                    caption={`Historical High-Volume Institutional Catalyst Days on NSE:${stockIntel.symbol} (Trailing 90 Sessions)`}
+                    columns={[
+                      "Date",
+                      "Institutional Catalyst Event",
+                      "1-Day Shock Move",
+                      "Volume Surge (RVOL)",
+                      "Close Price",
+                      "Subsequent 3-Day Follow-Through",
+                    ]}
+                    rows={stockIntel.news_report.historical_tape_catalysts.map((hc) => ({
+                      Date: hc.date,
+                      "Institutional Catalyst Event": hc.event_type,
+                      "1-Day Shock Move": `${hc.day_return_pct >= 0 ? "+" : ""}${hc.day_return_pct.toFixed(2)}%`,
+                      "Volume Surge (RVOL)": `${hc.rvol_multiple.toFixed(2)}x 21D Median`,
+                      "Close Price": `₹${hc.close_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+                      "Subsequent 3-Day Follow-Through":
+                        hc.subsequent_3d_ret_pct !== null
+                          ? `${hc.subsequent_3d_ret_pct >= 0 ? "+" : ""}${hc.subsequent_3d_ret_pct.toFixed(2)}%`
+                          : "LIVE / IN PROGRESS",
+                    }))}
+                    rowHeaderKey="Date"
+                  />
+                )}
+              </div>
+
+              {/* 3. STRATEGY PLAYBOOK & 2-YEAR WALK-FORWARD BACKTEST AUDIT ON THIS STOCK */}
+              <div
+                className="rounded-xl p-4 border flex flex-col gap-3.5"
+                style={{
+                  background: "var(--card-bg)",
+                  borderColor: "var(--card-border-strong)",
+                }}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b" style={{ borderColor: "var(--grid-line)" }}>
+                  <div>
+                    <h4 className="text-[15px] font-extrabold" style={{ color: "var(--text-main)" }}>
+                      🧪 2-Year Walk-Forward Strategy Backtest &amp; TreeSHAP Attribution on {stockIntel.symbol}
+                    </h4>
+                    <p className="text-[11.8px] font-semibold" style={{ color: "var(--text-muted)" }}>
+                      Non-overlapping 5-day swing backtest with Chandelier Profit Ratchets, Upper Runner Targets, Empirical Tail Stops &amp; Statutory Indian CNC Taxes deducted.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11.5px] font-extrabold">
+                    <span className="tok-chip">
+                      Signals Tested: {stockIntel.backtest_summary.overall.total_signals}
+                    </span>
+                    <span className="tok-chip">
+                      Post-Tax Win Rate: {stockIntel.backtest_summary.overall.win_rate_pct.toFixed(1)}%
+                    </span>
+                    <span className="tok-chip">
+                      Avg 5D Net: {stockIntel.backtest_summary.overall.avg_post_tax_ret_pct >= 0 ? "+" : ""}
+                      {stockIntel.backtest_summary.overall.avg_post_tax_ret_pct.toFixed(2)}%
+                    </span>
+                    <span className="tok-chip">
+                      Profit Factor: {stockIntel.backtest_summary.overall.profit_factor.toFixed(2)}x
+                    </span>
+                    <span className="tok-chip">
+                      2Y Compounded: {stockIntel.backtest_summary.overall.cum_compounded_ret_pct >= 0 ? "+" : ""}
+                      {stockIntel.backtest_summary.overall.cum_compounded_ret_pct.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* TreeSHAP Feature Attribution Pills */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-[11.8px]">
+                  <div className="rounded-xl p-2.5 border" style={{ background: "var(--surface-subtle)", borderColor: "var(--card-border-strong)" }}>
+                    <div className="font-bold text-[10.5px]" style={{ color: "var(--text-muted)" }}>
+                      🟢 Top Bullish Driver #1 (SHAP)
+                    </div>
+                    <div className="font-extrabold mt-0.5">{stockIntel.strategy_analysis.shap_driver_1}</div>
+                  </div>
+                  <div className="rounded-xl p-2.5 border" style={{ background: "var(--surface-subtle)", borderColor: "var(--card-border-strong)" }}>
+                    <div className="font-bold text-[10.5px]" style={{ color: "var(--text-muted)" }}>
+                      🟢 Top Bullish Driver #2 (SHAP)
+                    </div>
+                    <div className="font-extrabold mt-0.5">{stockIntel.strategy_analysis.shap_driver_2}</div>
+                  </div>
+                  <div className="rounded-xl p-2.5 border" style={{ background: "var(--surface-subtle)", borderColor: "var(--card-border-strong)" }}>
+                    <div className="font-bold text-[10.5px]" style={{ color: "var(--text-muted)" }}>
+                      🟢 Top Bullish Driver #3 (SHAP)
+                    </div>
+                    <div className="font-extrabold mt-0.5">{stockIntel.strategy_analysis.shap_driver_3}</div>
+                  </div>
+                  <div className="rounded-xl p-2.5 border" style={{ background: "var(--surface-subtle)", borderColor: "var(--card-border-strong)" }}>
+                    <div className="font-bold text-[10.5px]" style={{ color: "var(--red-main)" }}>
+                      🔴 Primary Risk Drag (SHAP)
+                    </div>
+                    <div className="font-extrabold mt-0.5">{stockIntel.strategy_analysis.shap_top_drag}</div>
+                  </div>
+                </div>
+
+                {/* All 4 Strategy Playbooks Backtest Comparison on This Stock */}
+                <GenericResponsiveTable
+                  caption={`How Each of Our 4 Strategy Playbooks Performed on NSE:${stockIntel.symbol} (2-Year Walk-Forward Backtest)`}
+                  columns={[
+                    "Strategy Playbook",
+                    "Status Today",
+                    "5D Signals Tested",
+                    "Post-Tax Win Rate",
+                    "Avg 5D Gross Return",
+                    "Avg 5D Post-Tax Net",
+                    "Avg 5D Alpha vs Nifty",
+                    "Profit Factor",
+                  ]}
+                  rows={stockIntel.backtest_summary.playbooks.map((pb) => ({
+                    "Strategy Playbook": pb.strategy,
+                    "Status Today": pb.is_assigned ? "🟢 ACTIVE ASSIGNED PLAYBOOK" : "⚪ Alternative Playbook",
+                    "5D Signals Tested": String(pb.signals_count),
+                    "Post-Tax Win Rate": `${pb.win_rate_pct.toFixed(1)}%`,
+                    "Avg 5D Gross Return": `${pb.avg_gross_ret_pct >= 0 ? "+" : ""}${pb.avg_gross_ret_pct.toFixed(2)}%`,
+                    "Avg 5D Post-Tax Net": `${pb.avg_post_tax_ret_pct >= 0 ? "+" : ""}${pb.avg_post_tax_ret_pct.toFixed(2)}%`,
+                    "Avg 5D Alpha vs Nifty": `${pb.avg_alpha_vs_nifty_pct >= 0 ? "+" : ""}${pb.avg_alpha_vs_nifty_pct.toFixed(2)}%`,
+                    "Profit Factor": `${pb.profit_factor.toFixed(2)}x`,
+                  }))}
+                  rowHeaderKey="Strategy Playbook"
+                />
+
+                {/* Last 10 Historical 5-Day Backtest Signals on This Stock */}
+                <GenericResponsiveTable
+                  caption={`Recent Completed 5-Day Swing Backtest Signals on NSE:${stockIntel.symbol}`}
+                  columns={[
+                    "Entry Date",
+                    "Strategy",
+                    "Entry Price",
+                    "5D Exit Price",
+                    "Gross 5D Return",
+                    "Post-Tax Net Return",
+                    "Nifty 5D Return",
+                    "Net Alpha vs Nifty",
+                    "Outcome",
+                  ]}
+                  rows={stockIntel.backtest_summary.recent_signals.map((sg) => ({
+                    "Entry Date": sg.entry_date,
+                    Strategy: sg.strategy,
+                    "Entry Price": `₹${sg.entry_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+                    "5D Exit Price": `₹${sg.exit_price_5d.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+                    "Gross 5D Return": `${sg.gross_ret_pct >= 0 ? "+" : ""}${sg.gross_ret_pct.toFixed(2)}%`,
+                    "Post-Tax Net Return": `${sg.post_tax_net_ret_pct >= 0 ? "+" : ""}${sg.post_tax_net_ret_pct.toFixed(2)}%`,
+                    "Nifty 5D Return": `${sg.nifty_5d_ret_pct >= 0 ? "+" : ""}${sg.nifty_5d_ret_pct.toFixed(2)}%`,
+                    "Net Alpha vs Nifty": `${sg.net_alpha_pct >= 0 ? "+" : ""}${sg.net_alpha_pct.toFixed(2)}%`,
+                    Outcome: sg.outcome === "WIN" ? "🟢 WIN (Post-Tax Profitable)" : "🔴 LOSS (Stopped / Below Tax)",
+                  }))}
+                  rowHeaderKey="Entry Date"
+                />
+
+                {/* Real Paper-Broker Ledger Fills on This Stock (if traded in live 13-session ledger) */}
+                {stockIntel.backtest_summary.real_ledger_trades.length > 0 && (
+                  <GenericResponsiveTable
+                    caption={`Live Paper-Broker Ledger Executions Recorded for NSE:${stockIntel.symbol}`}
+                    columns={[
+                      "Trade Date",
+                      "Side",
+                      "Shares",
+                      "Fill Price",
+                      "Gross Notional",
+                      "Statutory Taxes",
+                      "Realized Net PnL",
+                      "Execution Reason",
+                    ]}
+                    rows={stockIntel.backtest_summary.real_ledger_trades.map((lt) => ({
+                      "Trade Date": lt.date,
+                      Side: lt.side === "BUY" ? "🟢 BUY" : "🔴 SELL",
+                      Shares: String(lt.quantity),
+                      "Fill Price": `₹${lt.fill_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+                      "Gross Notional": `₹${lt.notional_inr.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+                      "Statutory Taxes": `₹${lt.tax_inr.toFixed(2)}`,
+                      "Realized Net PnL":
+                        lt.side === "SELL"
+                          ? `${lt.realized_net_pnl_inr >= 0 ? "+" : ""}₹${lt.realized_net_pnl_inr.toFixed(2)}`
+                          : "— (Entry Fill)",
+                      "Execution Reason": `${lt.reason} (${lt.strategy})`,
+                    }))}
+                    rowHeaderKey="Trade Date"
+                  />
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </section>
