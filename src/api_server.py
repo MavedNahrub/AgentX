@@ -123,43 +123,51 @@ def get_pipeline_artifacts(force: bool = False) -> dict[str, Any]:
 
     data_engine = HybridDataEngine(cache_dir="data/cache", capital_cfg=cap_cfg)
     stocks_df, macro_df, _ = data_engine.fetch_and_build_telemetry(force_refresh=False)
-    feat_engine = ChameleonFeatureEngine(cache_dir="data/cache")
-    feat_df = feat_engine.build_features(stocks_df, macro_df, save_cache=False)
 
     latest_ranked_path = cache_dir / "alpha_scout_latest_ranked.parquet"
     latest_sector_path = cache_dir / "alpha_scout_latest_sector.parquet"
+    feat_cache_path = cache_dir / "chameleon_features.parquet"
 
-    if latest_ranked_path.exists():
+    if latest_ranked_path.exists() and latest_sector_path.exists():
         paired_df = pd.read_parquet(latest_ranked_path)
+        sector_df = pd.read_parquet(latest_sector_path)
+        feat_df = pd.read_parquet(feat_cache_path) if feat_cache_path.exists() else pd.DataFrame()
         as_of_date = pd.Timestamp(paired_df["date"].iloc[0])
         as_of_str = as_of_date.strftime("%Y-%m-%d")
-        if latest_sector_path.exists():
-            sector_df = pd.read_parquet(latest_sector_path)
-        else:
-            scout = WalkForwardAlphaScout()
-            _, sector_df, _ = scout.score_cross_section_with_shap(feat_df, retrain=False)
         wf_meta = {"as_of_date": as_of_str, "source": "alpha_scout_latest_ranked"}
         board_df = pd.DataFrame()
+        news_map = {}
     else:
-        scout = WalkForwardAlphaScout()
-        ranked_df, sector_df, wf_meta = scout.score_cross_section_with_shap(feat_df, retrain=True)
-        as_of_date = pd.Timestamp(ranked_df["date"].iloc[0])
-        as_of_str = as_of_date.strftime("%Y-%m-%d")
+        feat_engine = ChameleonFeatureEngine(cache_dir="data/cache")
+        feat_df = feat_engine.build_features(stocks_df, macro_df, save_cache=False)
+        if latest_ranked_path.exists():
+            paired_df = pd.read_parquet(latest_ranked_path)
+            as_of_date = pd.Timestamp(paired_df["date"].iloc[0])
+            as_of_str = as_of_date.strftime("%Y-%m-%d")
+            scout = WalkForwardAlphaScout()
+            _, sector_df, _ = scout.score_cross_section_with_shap(feat_df, retrain=False)
+            wf_meta = {"as_of_date": as_of_str, "source": "alpha_scout_latest_ranked"}
+            board_df = pd.DataFrame()
+        else:
+            scout = WalkForwardAlphaScout()
+            ranked_df, sector_df, wf_meta = scout.score_cross_section_with_shap(feat_df, retrain=True)
+            as_of_date = pd.Timestamp(ranked_df["date"].iloc[0])
+            as_of_str = as_of_date.strftime("%Y-%m-%d")
 
-        tournament = EventDrivenStrategyTournament()
-        board_df = tournament.run_post_tax_tournament(feat_df, as_of_date=as_of_date)
-        paired_df = tournament.assign_strategy_and_exit_geometry(ranked_df, board_df)
+            tournament = EventDrivenStrategyTournament()
+            board_df = tournament.run_post_tax_tournament(feat_df, as_of_date=as_of_date)
+            paired_df = tournament.assign_strategy_and_exit_geometry(ranked_df, board_df)
 
-    news_engine = DateBoundedNewsVetoEngine()
-    news_map = {}
-    for _, r in paired_df.head(8).iterrows():
-        ret_3d_pct = float(r["fib_mom_z_3d"] * r["ret_std_21d"] * np.sqrt(3.0) * 100.0)
-        news_map[str(r["symbol"])] = news_engine.evaluate_catalyst_veto(
-            symbol=str(r["symbol"]),
-            as_of_date=as_of_date,
-            stock_empirical_tail_stop_pct=float(r["empirical_tail_stop_pct"]),
-            recent_3d_return_pct=ret_3d_pct,
-        )
+        news_engine = DateBoundedNewsVetoEngine()
+        news_map = {}
+        for _, r in paired_df.head(8).iterrows():
+            ret_3d_pct = float(r["fib_mom_z_3d"] * r["ret_std_21d"] * np.sqrt(3.0) * 100.0)
+            news_map[str(r["symbol"])] = news_engine.evaluate_catalyst_veto(
+                symbol=str(r["symbol"]),
+                as_of_date=as_of_date,
+                stock_empirical_tail_stop_pct=float(r["empirical_tail_stop_pct"]),
+                recent_3d_return_pct=ret_3d_pct,
+            )
 
     vault = CryptographicRiskVault(capital_cfg=cap_cfg)
     guardrails = vault.compute_drawdown_and_daily_guardrails(
@@ -370,13 +378,18 @@ def build_continuous_12session_curve(ledger_df: pd.DataFrame) -> list[dict[str, 
     if ledger_df.empty:
         return pts
 
-    init_cap = float(ledger_df["initial_capital_inr"].iloc[0]) if "initial_capital_inr" in ledger_df.columns else 100_000.0
+    prev_port_cum_mult = 1.0
     prev_nifty_cum_mult = 1.0
+    prev_eod_eq = float(ledger_df["initial_capital_inr"].iloc[0]) if "initial_capital_inr" in ledger_df.columns else 100_000.0
+    prev_init_c = prev_eod_eq
 
     for _, l_row in ledger_df.iterrows():
         dt_str = str(l_row["market_date"])
         c_path = Path(f"reports/live_6day_test/intraday_375m_curve_{dt_str}.parquet")
         nif_day_ret = float(l_row.get("nifty_session_return_pct", 0.0))
+        cur_init_c = float(l_row.get("initial_capital_inr", prev_init_c))
+        dep_delta = max(0.0, cur_init_c - prev_init_c)
+        sess_base_eq = prev_eod_eq + dep_delta
         if c_path.exists():
             cdf = pd.read_parquet(c_path)
             if not cdf.empty and "portfolio_equity_inr" in cdf.columns:
@@ -387,7 +400,8 @@ def build_continuous_12session_curve(ledger_df: pd.DataFrame) -> list[dict[str, 
                 n_bars = max(1, len(sub) - 1)
                 for b_i, (_, cr) in enumerate(sub.iterrows()):
                     eq_val = float(cr["portfolio_equity_inr"])
-                    p_cum = (eq_val / max(1.0, init_cap) - 1.0) * 100.0
+                    p_intraday_pct = (eq_val / max(1.0, sess_base_eq) - 1.0) * 100.0
+                    p_cum = (prev_port_cum_mult * (1.0 + p_intraday_pct / 100.0) - 1.0) * 100.0
                     if "nifty50_bench_return_pct" in cr and pd.notna(cr["nifty50_bench_return_pct"]):
                         n_intraday_pct = float(cr["nifty50_bench_return_pct"])
                     else:
@@ -404,20 +418,30 @@ def build_continuous_12session_curve(ledger_df: pd.DataFrame) -> list[dict[str, 
                             "n": round(n_cum, 2),
                         }
                     )
+                eod_eq_row = float(l_row.get("total_equity_inr", cdf["portfolio_equity_inr"].iloc[-1]))
+                port_day_ret = (eod_eq_row / max(1.0, sess_base_eq) - 1.0) * 100.0
+                prev_port_cum_mult *= 1.0 + port_day_ret / 100.0
                 prev_nifty_cum_mult *= 1.0 + nif_day_ret / 100.0
+                prev_eod_eq = eod_eq_row
+                prev_init_c = cur_init_c
                 continue
 
         # Fallback to EOD ledger point if minute parquet missing
+        eod_eq_row = float(l_row["total_equity_inr"])
+        port_day_ret = (eod_eq_row / max(1.0, sess_base_eq) - 1.0) * 100.0
+        prev_port_cum_mult *= 1.0 + port_day_ret / 100.0
         pts.append(
             {
                 "t": f"{dt_str[5:]} 15:29",
                 "date": dt_str,
-                "eq": round(float(l_row["total_equity_inr"]), 2),
-                "p": round(float(l_row["total_return_pct"]), 2),
+                "eq": round(eod_eq_row, 2),
+                "p": round((prev_port_cum_mult - 1.0) * 100.0, 2),
                 "n": round(float(l_row.get("nifty_cum_return_pct", 0.0)), 2),
             }
         )
         prev_nifty_cum_mult = 1.0 + float(l_row.get("nifty_cum_return_pct", 0.0)) / 100.0
+        prev_eod_eq = eod_eq_row
+        prev_init_c = cur_init_c
     return pts
 
 
@@ -649,10 +673,15 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
 
     if not ldf.empty:
         n_sessions = len(ldf)
-        prev_eq = init_cap
+        prev_eq = float(ldf["initial_capital_inr"].iloc[0]) if "initial_capital_inr" in ldf.columns else 100_000.0
+        prev_row_init_cap = prev_eq
         prev_nif_cum = 0.0
         for idx_l, l_row in ldf.iterrows():
             cur_eq = float(l_row["total_equity_inr"])
+            row_init_cap = float(l_row.get("initial_capital_inr", prev_row_init_cap))
+            row_dep_delta = max(0.0, row_init_cap - prev_row_init_cap)
+            adj_prev_eq = prev_eq + row_dep_delta
+
             s_ret = round(float(l_row.get("session_return_pct", 0.0)), 2)
             n_sess = round(float(l_row.get("nifty_session_return_pct", 0.0)), 2)
             c_ret = round(float(l_row.get("total_return_pct", 0.0)), 2)
@@ -660,16 +689,26 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
             s_alp = round(float(l_row.get("session_alpha_pct", s_ret - n_sess)), 2)
             c_alp = round(float(l_row.get("cum_alpha_pct", c_ret - n_cum)), 2)
 
-            # Forward 5-session swing window (Day idx_l+1 through Day idx_l+5)
+            # Forward 5-session swing window (Day idx_l+1 through Day idx_l+5), cash-flow adjusted
             end_idx_5d = min(int(idx_l) + swing_horizon_sessions - 1, n_sessions - 1)
             days_elapsed_5d = end_idx_5d - int(idx_l) + 1
             is_settled_5d = (int(idx_l) + swing_horizon_sessions - 1) < n_sessions
             end_eq_5d = float(ldf["total_equity_inr"].iloc[end_idx_5d])
+            end_init_cap_5d = (
+                float(ldf["initial_capital_inr"].iloc[end_idx_5d])
+                if "initial_capital_inr" in ldf.columns
+                else row_init_cap
+            )
+            deposits_after_start_5d = max(0.0, end_init_cap_5d - row_init_cap)
             end_date_5d = str(ldf["market_date"].iloc[end_idx_5d])
             end_nif_cum_5d = float(ldf["nifty_cum_return_pct"].iloc[end_idx_5d])
 
-            fwd_5d_profit_inr = round(end_eq_5d - prev_eq, 2)
-            fwd_5d_ret_pct = round((end_eq_5d / max(1.0, prev_eq) - 1.0) * 100.0, 2)
+            fwd_5d_profit_inr = round((end_eq_5d - deposits_after_start_5d) - adj_prev_eq, 2)
+            # Compound daily cash-flow-adjusted session returns over [idx_l .. end_idx_5d]
+            twr_5d_mult = 1.0
+            for k_idx in range(int(idx_l), end_idx_5d + 1):
+                twr_5d_mult *= 1.0 + float(ldf["session_return_pct"].iloc[k_idx]) / 100.0
+            fwd_5d_ret_pct = round((twr_5d_mult - 1.0) * 100.0, 2)
             fwd_5d_nifty_pct = round(
                 ((1.0 + end_nif_cum_5d / 100.0) / max(1e-6, 1.0 + prev_nif_cum / 100.0) - 1.0) * 100.0,
                 2,
@@ -685,9 +724,9 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
                 {
                     "day_num": int(idx_l) + 1,
                     "date": str(l_row["market_date"]),
-                    "prev_eq": round(prev_eq, 2),
+                    "prev_eq": round(adj_prev_eq, 2),
                     "eq": round(cur_eq, 2),
-                    "session_pnl_inr": round(cur_eq - prev_eq, 2),
+                    "session_pnl_inr": round(cur_eq - adj_prev_eq, 2),
                     "sess_ret": s_ret,
                     "nif_sess": n_sess,
                     "sess_alpha": s_alp,
@@ -710,11 +749,15 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
                 }
             )
             prev_eq = cur_eq
+            prev_row_init_cap = row_init_cap
             prev_nif_cum = n_cum
 
         latest_sess_ret = float(ldf["session_return_pct"].iloc[-1])
         latest_nifty_sess = float(ldf["nifty_session_return_pct"].iloc[-1])
         latest_nifty_cum = float(ldf["nifty_cum_return_pct"].iloc[-1])
+        if session_ledger:
+            # Use GIPS Time-Weighted Return from session_ledger so deposits never dilute cumulative return %
+            net_collective_pct = float(session_ledger[-1]["ret_pct"])
         if "churn_taxes_saved_inr" in ldf.columns:
             live_churn_saved = max(live_churn_saved, float(ldf["churn_taxes_saved_inr"].iloc[-1]))
 
@@ -1324,12 +1367,18 @@ def build_workstation_payload(force: bool = False) -> dict[str, Any]:
         for _, sec_row in data["sector_df"].iterrows():
             sec_name = str(sec_row.get("sector", "NSE"))
             sec_alpha = float(sec_row.get("mean_expected_alpha_pct", sec_row.get("sector_expected_alpha_pct", sec_row.get("expected_5d_alpha_pct", 0.0))))
+            raw_cap_st = str(sec_row.get("sector_capital_status", sec_row.get("sector_allocation_status", "")))
+            sec_slots = int(active_sec_counts.get(sec_name, 0))
+            if raw_cap_st:
+                sec_st = "ACTIVE" if (raw_cap_st.startswith("ACTIVE") or sec_slots > 0) else "STARVED_ZERO"
+            else:
+                sec_st = "ACTIVE" if (sec_alpha > 0 or sec_slots > 0) else "STARVED_ZERO"
             sector_list.append(
                 {
                     "sector": sec_name,
-                    "slots": int(active_sec_counts.get(sec_name, 0)),
+                    "slots": sec_slots,
                     "alpha": round(sec_alpha, 2),
-                    "status": str(sec_row.get("sector_allocation_status", "ACTIVE" if sec_alpha > 0 else "STARVED_ZERO")),
+                    "status": sec_st,
                 }
             )
 
@@ -1866,7 +1915,7 @@ def api_intraday_curve(scope: str = Query("ALL")) -> dict[str, Any]:
         t_raw = str(cr.get("timestamp_ist", ""))
         hhmm = t_raw[11:16] if len(t_raw) >= 16 else str(cr.get("minute_num", ""))
         eq_v = float(cr["portfolio_equity_inr"])
-        p_sess = float(cr.get("portfolio_return_pct", (eq_v / max(1.0, init_eq) - 1.0) * 100.0))
+        p_sess = (eq_v / max(1.0, init_eq) - 1.0) * 100.0
         n_sess = float(cr.get("nifty50_bench_return_pct", 0.0))
         pts.append(
             {

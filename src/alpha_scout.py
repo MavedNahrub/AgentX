@@ -419,12 +419,18 @@ class WalkForwardAlphaScout:
             r_body15 = (-day_slice["mean_rev_zscore_13d"]).rank(pct=True).values
             r_clv15 = r_clv5
 
+        in_archetype = (day_slice["micro_regime"] != "NEUTRAL_WATCH").astype(float).values
+        # Regime-Conditioned Structural Confirmation (AGENTS.md Rule 3):
+        # Confirmed archetypes (SMOOTH_TREND, RANGE_REVERSION, FAST_BREAKOUT) get full credit for coiled value
+        # compression & opening thrust; unconfirmed NEUTRAL_WATCH chop is dampened so it never outranks confirmed setups.
+        r_struct_gate = np.where(in_archetype > 0.5, 1.0, 0.45 * r_clv5)
+
         cs_composite = (
             0.35 * r_body15
             + 0.25 * r_clv15
-            + 0.17 * r_val_rel
-            + 0.10 * r_val_m21
-            + 0.05 * r_val_m55
+            + 0.17 * (r_val_rel * r_struct_gate)
+            + 0.10 * (r_val_m21 * r_struct_gate)
+            + 0.05 * (r_val_m55 * r_struct_gate)
             + 0.04 * r_vshock
             + 0.04 * r_clv5
         )
@@ -433,11 +439,11 @@ class WalkForwardAlphaScout:
         # Self-calibrated blend using Purged Out-of-Sample Rank IC (zero hardcoded magic scale!)
         w_ml = float(np.clip(self.last_rank_ic, 0.15, 0.45))
         structural_prior_weight = 1.0 - w_ml
-        in_archetype = (day_slice["micro_regime"] != "NEUTRAL_WATCH").astype(float).values
+        regime_conf_mult = np.where(in_archetype > 0.5, 1.0, 0.55)
 
         day_slice["pred_info_ratio"] = (
-            w_ml * dual_ml_ir
-            + structural_prior_weight * pred_std * (0.35 * in_archetype + 1.35 * cs_z)
+            w_ml * dual_ml_ir * regime_conf_mult
+            + structural_prior_weight * pred_std * (0.45 * in_archetype + 1.35 * cs_z * regime_conf_mult)
         )
 
         raw_5d_vol_pct = day_slice["ret_std_21d"] * np.sqrt(5.0) * 100.0
@@ -535,7 +541,18 @@ class WalkForwardAlphaScout:
             .sort_values("mean_pred_ir", ascending=False)
             .reset_index(drop=True)
         )
-        sector_active_mask = (sector_df["max_pred_ir"] > ir_median) & (sector_df["positive_alpha_stocks"] >= 1)
+        # AGENTS.md Rule 2: Route ₹0 to sectors that fail the post-tax + standard-error alpha hurdle,
+        # while allowing the #1 cross-sectional structural leader's sector if it is a confirmed non-chop archetype.
+        top1_confirmed_sectors = set(
+            ranked_df.loc[
+                (ranked_df["alpha_rank"] == 1) & (ranked_df["micro_regime"] != "NEUTRAL_WATCH"),
+                "sector",
+            ].astype(str).tolist()
+        )
+        sector_active_mask = (
+            (sector_df["mean_expected_alpha_pct"] >= dynamic_alpha_hurdle_pct)
+            | (sector_df["sector"].astype(str).isin(top1_confirmed_sectors))
+        )
         n_active_sectors = int(sector_active_mask.sum())
         if n_active_sectors <= 1:
             active_cap_label = "Adaptive Up to 4 Slots (100% Booming-Sector Focus)"

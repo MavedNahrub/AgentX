@@ -92,7 +92,28 @@ def fetch_intraday_15m_and_5m_for_date(
     p375 = CACHE_DIR / f"intraday_{target_date_str}_375m.parquet"
 
     if not force_refresh and p15.exists() and p375.exists():
-        return pd.read_parquet(p15), pd.read_parquet(p375)
+        c15 = pd.read_parquet(p15)
+        c375 = pd.read_parquet(p375)
+        if not c375.empty and int(c375["minute_num"].max()) < 375 and int(c375["minute_num"].max()) >= 360:
+            full_grid = pd.date_range(start=f"{target_date_str} 09:15:00", end=f"{target_date_str} 15:29:00", freq="1min")
+            fixed_parts = []
+            for sym_k, grp_k in c375.groupby("symbol", sort=False):
+                bsrc_k = str(grp_k["bar_source"].iloc[0]) if "bar_source" in grp_k.columns else "RAW_NSE_1M"
+                gk = grp_k.drop_duplicates(subset=["timestamp"]).set_index("timestamp").reindex(full_grid)
+                gk["close"] = gk["close"].ffill().bfill()
+                gk["open"] = gk["open"].fillna(gk["close"])
+                gk["high"] = gk["high"].fillna(gk[["open", "close"]].max(axis=1))
+                gk["low"] = gk["low"].fillna(gk[["open", "close"]].min(axis=1))
+                gk["volume"] = gk["volume"].fillna(0.0).astype(float)
+                gk = gk.reset_index().rename(columns={"index": "timestamp"})
+                gk["symbol"] = sym_k
+                gk["minute_num"] = np.arange(1, len(gk) + 1)
+                gk["bar_source"] = bsrc_k
+                fixed_parts.append(gk[["minute_num", "timestamp", "symbol", "open", "high", "low", "close", "volume", "bar_source"]])
+            if fixed_parts:
+                c375 = pd.concat(fixed_parts, ignore_index=True)
+                c375.to_parquet(p375, index=False)
+        return c15, c375
 
     yf_tickers = symbols or list(NIFTY50_SECTOR_MAP.keys())
     target_dt = pd.Timestamp(target_date_str)
@@ -352,7 +373,7 @@ def build_causal_morning_telemetry(
                 nr["high"] = ob["high"]
                 nr["low"] = ob["low"]
                 nr["close"] = ob["close"]
-                nr["volume"] = max(1.0, ob["volume"] * 15.0)
+                nr["volume"] = max(1.0, ob["volume"] * 25.0)
                 nr["real_15m_vwap"] = ob["real_15m_vwap"]
                 nr["opening_15m_clv"] = ob["opening_15m_clv"]
                 nr["opening_15m_body_pct"] = ob["opening_15m_body_pct"]
@@ -382,6 +403,7 @@ def build_causal_morning_telemetry(
             s_cut.loc[idx, "high"] = ob["high"]
             s_cut.loc[idx, "low"] = ob["low"]
             s_cut.loc[idx, "close"] = ob["close"]
+            s_cut.loc[idx, "volume"] = max(1.0, ob["volume"] * 25.0)
             s_cut.loc[idx, "real_15m_vwap"] = ob["real_15m_vwap"]
             s_cut.loc[idx, "opening_15m_clv"] = ob["opening_15m_clv"]
             s_cut.loc[idx, "opening_15m_body_pct"] = ob["opening_15m_body_pct"]
@@ -922,12 +944,21 @@ def run_stage_session_375m(
 
     # Load learned stop/target geometry & top intraday candidates from latest ranked parquet
     ranked_path = CACHE_DIR / "alpha_scout_latest_ranked.parquet"
+    sector_path = CACHE_DIR / "alpha_scout_latest_sector.parquet"
     tail_stop_map = {}
     rk_df = pd.DataFrame()
+    active_sectors_set = set()
     if ranked_path.exists():
         rk_df = pd.read_parquet(ranked_path).sort_values("alpha_rank", ascending=True).reset_index(drop=True)
         for _, r in rk_df.iterrows():
             tail_stop_map[str(r["symbol"])] = float(r.get("empirical_tail_stop_pct", 0.02))
+    if sector_path.exists():
+        sec_df_m = pd.read_parquet(sector_path)
+        active_sectors_set = set(
+            sec_df_m.loc[sec_df_m["sector_capital_status"].astype(str).str.startswith("ACTIVE_ELIGIBLE"), "sector"]
+            .astype(str)
+            .tolist()
+        )
 
     # Build fast lookup dictionary: (minute_num, symbol) -> bar dict (include held symbols + top 15 ranked candidates for Upgrade 2 redeployment)
     held_symbols = open_pos_df["symbol"].tolist() if not open_pos_df.empty else []
@@ -1034,9 +1065,12 @@ def run_stage_session_375m(
         f"  ▶️ Running 375-Minute Intraday Loop (Mode: {speed.upper()}) for Active Holdings: {list(active_positions.keys())}..."
     )
 
+    last_bench_ret = 0.0
     for m in range(1, 376):
         # Strictly causal clock-by-clock slice: only minute `m` is touched when the clock reaches `m`
-        b_info = nifty_min_map.get(m, {"timestamp": f"{target_date_str} 09:15:00", "bench_ret_pct": 0.0})
+        fallback_ts = (pd.Timestamp(f"{target_date_str} 09:15:00") + timedelta(minutes=m - 1)).strftime("%Y-%m-%d %H:%M:%S")
+        b_info = nifty_min_map.get(m, {"timestamp": fallback_ts, "bench_ret_pct": last_bench_ret})
+        last_bench_ret = float(b_info["bench_ret_pct"])
         ts_str = b_info["timestamp"]
         sym_bars = bar_lookup.get(m, {})
 
@@ -1216,12 +1250,15 @@ def run_stage_session_375m(
                     exp_alpha_c = float(cand_row["expected_5d_alpha_pct"])
                     strat_exp_c = float(cand_row.get("strategy_expectancy_pct", 0.25))
                     cand_sec = str(cand_row["sector"])
+                    cand_regime = str(cand_row.get("micro_regime", "SMOOTH_TREND"))
                     active_sec_cnt = sum(1 for p_act in active_positions.values() if str(p_act["sector"]) == cand_sec)
-                    # Require positive intraday confirmation above 09:30 Opening VWAP, post-tax alpha hurdle, and <= 2 slots/sector
+                    # Require active sector, structural regime confirmation, intraday confirmation above 09:30 VWAP, and <= 2 slots/sector
                     if (
                         strat_exp_c <= 0.0
                         or exp_alpha_c <= cap_cfg.dynamic_round_trip_tax_pct
                         or c_px_m < open_930
+                        or cand_regime == "NEUTRAL_WATCH"
+                        or (active_sectors_set and cand_sec not in active_sectors_set)
                         or active_sec_cnt >= cap_cfg.max_slots_per_sector
                     ):
                         continue
@@ -1425,7 +1462,7 @@ def run_stage_session_375m(
     try:
         all_curve_files = sorted(OUT_DIR.glob("intraday_375m_curve_2026-*.parquet"))
         comb_dfs = []
-        prev_eod_eq = 100000.0
+        cum_port = 0.0
         cum_bench = 0.0
         cum_min = 0
         for cf in all_curve_files:
@@ -1433,8 +1470,11 @@ def run_stage_session_375m(
             cdf = pd.read_parquet(cf).copy()
             cdf["session_date"] = dt_str
             cdf["Session_Date"] = dt_str
-            cdf["portfolio_cum_return_pct"] = ((cdf["portfolio_equity_inr"] / 100000.0) - 1.0) * 100.0
-            cdf["portfolio_session_return_pct"] = ((cdf["portfolio_equity_inr"] / max(1.0, prev_eod_eq)) - 1.0) * 100.0
+            sess_open_eq = float(cdf["portfolio_equity_inr"].iloc[0]) if not cdf.empty else 100000.0
+            cdf["portfolio_session_return_pct"] = ((cdf["portfolio_equity_inr"] / max(1.0, sess_open_eq)) - 1.0) * 100.0
+            cdf["portfolio_cum_return_pct"] = (
+                (1.0 + cum_port / 100.0) * (1.0 + cdf["portfolio_session_return_pct"] / 100.0) - 1.0
+            ) * 100.0
             cdf["nifty50_session_return_pct"] = cdf["nifty50_bench_return_pct"]
             cdf["nifty50_cum_return_pct"] = (
                 (1.0 + cum_bench / 100.0) * (1.0 + cdf["nifty50_bench_return_pct"] / 100.0) - 1.0
@@ -1443,7 +1483,7 @@ def run_stage_session_375m(
             cdf.to_parquet(cf, index=False)
             if dt_str == target_date_str:
                 cdf.to_parquet(OUT_DIR / "intraday_375m_curve_latest.parquet", index=False)
-            prev_eod_eq = float(cdf["portfolio_equity_inr"].iloc[-1])
+            cum_port = float(cdf["portfolio_cum_return_pct"].iloc[-1])
             cum_bench = float(cdf["nifty50_cum_return_pct"].iloc[-1])
             cdf["Cumulative_Minute"] = range(cum_min + 1, cum_min + len(cdf) + 1)
             cdf["global_minute_num"] = cdf["Cumulative_Minute"]
@@ -1548,6 +1588,8 @@ def run_stage_report(target_date_str: str) -> None:
     # Append to collective_6day_ledger.csv with Per-Session (1-Day) & Cumulative Return % vs Nifty 50
     ledger_csv = OUT_DIR / "collective_6day_ledger.csv"
     prev_eq = 100000.0
+    prev_init_cap = 100000.0
+    prev_tot_ret_pct = 0.0
     prev_nifty_cum = 0.0
     if ledger_csv.exists():
         try:
@@ -1555,6 +1597,10 @@ def run_stage_report(target_date_str: str) -> None:
             old_led = old_led[old_led["market_date"].astype(str) != target_date_str].copy()
             if not old_led.empty:
                 prev_eq = float(old_led["total_equity_inr"].iloc[-1])
+                if "initial_capital_inr" in old_led.columns:
+                    prev_init_cap = float(old_led["initial_capital_inr"].iloc[-1])
+                if "total_return_pct" in old_led.columns:
+                    prev_tot_ret_pct = float(old_led["total_return_pct"].iloc[-1])
                 if "nifty_cum_return_pct" in old_led.columns:
                     prev_nifty_cum = float(old_led["nifty_cum_return_pct"].iloc[-1])
             old_led.to_csv(ledger_csv, mode="w", header=True, index=False)
@@ -1567,13 +1613,20 @@ def run_stage_report(target_date_str: str) -> None:
         try:
             cdf_s = pd.read_parquet(curve_p)
             if not cdf_s.empty and "nifty50_bench_return_pct" in cdf_s.columns:
+                # Use last non-zero or final minute benchmark return
                 nifty_sess_ret = round(float(cdf_s["nifty50_bench_return_pct"].iloc[-1]), 3)
         except Exception:
             pass
 
     cur_eq = float(acct.get("total_equity_inr", 100000.0))
-    tot_ret_pct = round(float(acct.get("total_return_pct", 0.0)), 3)
-    sess_ret_pct = round(((cur_eq / max(1.0, prev_eq)) - 1.0) * 100.0, 3)
+    cur_init_cap = float(acct.get("initial_capital_inr", 100000.0))
+    deposit_delta = max(0.0, cur_init_cap - prev_init_cap)
+    adj_prev_eq = prev_eq + deposit_delta
+    sess_ret_pct = round(((cur_eq / max(1.0, adj_prev_eq)) - 1.0) * 100.0, 3)
+    if cur_init_cap > 100000.0 and prev_tot_ret_pct != 0.0:
+        tot_ret_pct = round(((1.0 + prev_tot_ret_pct / 100.0) * (1.0 + sess_ret_pct / 100.0) - 1.0) * 100.0, 2)
+    else:
+        tot_ret_pct = round(float(acct.get("total_return_pct", 0.0)), 2)
     nifty_cum_ret = round(((1.0 + prev_nifty_cum / 100.0) * (1.0 + nifty_sess_ret / 100.0) - 1.0) * 100.0, 3)
     sess_alpha_pct = round(sess_ret_pct - nifty_sess_ret, 3)
     cum_alpha_pct = round(tot_ret_pct - nifty_cum_ret, 3)

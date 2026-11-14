@@ -1133,7 +1133,7 @@ class IndiaPaperBroker:
         }
 
     def deposit_capital(self, amount_inr: float) -> Dict[str, float]:
-        """Deposit additional capital into trading wallet (cash_balance_inr + initial_capital_inr)."""
+        """Deposit additional capital into trading wallet (cash_balance_inr + initial_capital_inr + peak_equity_inr)."""
         if amount_inr <= 0:
             return self.get_account_summary()
         now_utc = datetime.now(timezone.utc).isoformat()
@@ -1143,10 +1143,11 @@ class IndiaPaperBroker:
                 UPDATE account_state
                 SET initial_capital_inr = initial_capital_inr + ?,
                     cash_balance_inr = cash_balance_inr + ?,
+                    peak_equity_inr = peak_equity_inr + ?,
                     updated_at_utc = ?
                 WHERE id = 1
                 """,
-                (amount_inr, amount_inr, now_utc),
+                (amount_inr, amount_inr, amount_inr, now_utc),
             )
             conn.commit()
         return self.get_account_summary()

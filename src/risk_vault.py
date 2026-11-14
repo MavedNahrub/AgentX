@@ -375,12 +375,13 @@ class CryptographicRiskVault:
                 if is_vetoed:
                     continue
 
-            # Gate 4 (Upgrade 5 — Opening 15-Minute 09:15-09:30 AM Microstructure Absorption Filter):
-            # If the stock is actively dumping near the bottom of its 15m opening range (CLV < 0.20 and negative 15m body),
-            # defer it to Pass 2 overflow so Pass 1 prioritizes candidates with strong morning institutional absorption.
+            # Gate 4 (Upgrade 5 — Opening 15-Minute Microstructure Absorption & Structural Archetype Filter):
+            # If the stock is in unconfirmed NEUTRAL_WATCH chop or actively dumping near the bottom of its 15m opening range,
+            # defer it to Pass 2 overflow so Pass 1 strictly prioritizes structurally confirmed regime setups.
             clv_15m = float(row.get("opening_15m_clv", 0.55))
             body_15m_pct = float(row.get("opening_15m_body_pct", 0.0))
-            if clv_15m < 0.20 and body_15m_pct < -0.25:
+            m_regime = str(row.get("micro_regime", "SMOOTH_TREND"))
+            if m_regime == "NEUTRAL_WATCH" or (clv_15m < 0.20 and body_15m_pct < -0.25):
                 overflow_rows.append(row)
                 continue
 
